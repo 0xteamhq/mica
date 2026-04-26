@@ -25,6 +25,7 @@
 use crate::backend::{StartParams, StartedSession, Stopper};
 use crate::caps::Caps;
 use crate::error::WdError;
+use crate::events::{ArtifactKind, FileCreated, SessionStopped};
 use crate::queue::Permit;
 use crate::session::Session;
 use crate::state::AppState;
@@ -32,8 +33,9 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::HeaderMap;
 use serde_json::Value;
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 const NO_WAIT_HEADER: &str = "x-selenoid-no-wait";
 
@@ -153,22 +155,62 @@ pub async fn create_session(
     let http = state.http.clone();
     let upstream_for_cancel = upstream.clone();
     let session_id_for_cancel = session_id.clone();
+    let events_for_cancel = state.events.clone();
+    let browser_name_for_cancel = browser_name.clone();
+    let version_for_cancel = version.clone();
+    let session_started = SystemTime::now();
+    let video_dir = state.args.video_output_dir.clone();
+    let log_dir = state.args.log_output_dir.clone();
     let cancel = Box::new(move || {
         // Release the queue slot regardless of stopper outcome.
         if let Ok(mut g) = permit_for_cancel.lock() {
             g.take();
         }
-        // Best-effort upstream DELETE + backend stop — both run in the
-        // background since cancel must be sync.
+        // Best-effort upstream DELETE + backend stop. T43: emit
+        // SessionStopped after stop, T44: emit FileCreated for any
+        // finalized artifact. All in the background since cancel
+        // must be sync.
         let http = http.clone();
         let upstream = upstream_for_cancel.clone();
         let sid = session_id_for_cancel.clone();
+        let events = events_for_cancel.clone();
+        let browser = browser_name_for_cancel.clone();
+        let version = version_for_cancel.clone();
+        let video_dir = video_dir.clone();
+        let log_dir = log_dir.clone();
         tokio::spawn(async move {
             let _ = http
                 .delete(format!("{upstream}/session/{sid}"))
                 .send()
                 .await;
             stopper.stop().await;
+            // T44 — emit FileCreated for whichever artifacts exist.
+            for (kind, dir, ext) in [
+                (ArtifactKind::Video, video_dir.as_str(), "mp4"),
+                (ArtifactKind::Log, log_dir.as_str(), "log"),
+            ] {
+                let path = PathBuf::from(dir).join(format!("{sid}.{ext}"));
+                if tokio::fs::metadata(&path).await.is_ok() {
+                    events
+                        .emit_file(FileCreated {
+                            path,
+                            session_id: sid.clone(),
+                            kind,
+                        })
+                        .await;
+                }
+            }
+            // T43 — SessionStopped goes out last so listeners that
+            // upload artifacts can rely on FileCreated having fired.
+            events
+                .emit_session(SessionStopped {
+                    session_id: sid,
+                    started: session_started,
+                    finished: SystemTime::now(),
+                    browser: Some(browser),
+                    browser_version: Some(version),
+                })
+                .await;
         });
     });
 

@@ -7,6 +7,7 @@
 use crate::backend::Backend;
 use crate::cli::Args;
 use crate::config::Config;
+use crate::events::EventBus;
 use crate::queue::Queue;
 use crate::session::SessionMap;
 use std::sync::Arc;
@@ -20,6 +21,7 @@ pub struct AppState {
     pub backend: Arc<dyn Backend>,
     pub args: Arc<Args>,
     pub http: reqwest::Client,
+    pub events: EventBus,
 }
 
 impl AppState {
@@ -37,6 +39,7 @@ impl AppState {
             backend,
             args: Arc::new(args),
             http,
+            events: EventBus::new(),
         }
     }
 }
