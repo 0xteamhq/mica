@@ -11,6 +11,7 @@ use crate::events::EventBus;
 use crate::queue::Queue;
 use crate::session::SessionMap;
 use arc_swap::ArcSwap;
+use metrics_exporter_prometheus::PrometheusHandle;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -25,6 +26,10 @@ pub struct AppState {
     pub args: Arc<Args>,
     pub http: reqwest::Client,
     pub events: EventBus,
+    /// Prometheus handle for `/metrics` rendering. `Option` so unit
+    /// tests can build an `AppState` without installing a global
+    /// recorder (only one process-wide recorder is ever installed).
+    pub metrics: Option<PrometheusHandle>,
 }
 
 impl AppState {
@@ -43,7 +48,15 @@ impl AppState {
             args: Arc::new(args),
             http,
             events: EventBus::new(),
+            metrics: None,
         }
+    }
+
+    /// Attach a Prometheus handle. `main.rs` calls this after
+    /// `observability::install()`; tests leave it unset.
+    pub fn with_metrics(mut self, handle: PrometheusHandle) -> Self {
+        self.metrics = Some(handle);
+        self
     }
 
     /// Cheap, lock-free snapshot of the current config.

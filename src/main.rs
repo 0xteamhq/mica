@@ -6,6 +6,7 @@ use mica::cli::Args;
 use mica::config::Config;
 use mica::handlers;
 use mica::isolation::capability::{Capabilities, select_driver};
+use mica::observability;
 use mica::pool::PooledBackend;
 use mica::shutdown;
 use mica::state::AppState;
@@ -102,7 +103,11 @@ async fn main() -> anyhow::Result<()> {
         docker_backend
     };
 
-    let state = AppState::new(config, args.clone(), backend);
+    // Install Prometheus recorder (one per process). Must happen
+    // before any code path records into `metrics::*` macros.
+    let prom = observability::install();
+
+    let state = AppState::new(config, args.clone(), backend).with_metrics(prom);
 
     if let Some(s3) = S3Uploader::from_args(&args.s3_bucket, &args.s3_region, &args.s3_prefix).await
     {

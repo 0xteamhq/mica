@@ -6,6 +6,7 @@ pub mod error;
 pub mod events;
 pub mod handlers;
 pub mod isolation;
+pub mod observability;
 pub mod plugins;
 pub mod pool;
 pub mod queue;
