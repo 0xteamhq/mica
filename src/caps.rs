@@ -25,6 +25,33 @@ pub struct Caps {
     /// server's default idle timeout for this session, capped at
     /// `--max-timeout`.
     pub session_timeout: Option<String>,
+    /// Selenoid: forwarded as `VIDEO_FRAME_RATE` env to the recorder.
+    pub video_frame_rate: Option<u32>,
+    /// Selenoid: forwarded as `CODEC` env to the recorder.
+    pub video_codec: Option<String>,
+    /// Selenoid: forwarded as `VIDEO_SIZE`. When unset, falls back to
+    /// `screen_resolution`.
+    pub video_screen_size: Option<String>,
+    /// Selenoid: per-session S3 key template overriding `--s3-prefix`.
+    /// Tokens: `$fileName`, `$fileExtension`, `$browserName`,
+    /// `$browserVersion`, `$sessionId`, `$fileType`, `$date`.
+    pub s3_key_pattern: Option<String>,
+    /// Selenoid: docker container hostname.
+    pub container_hostname: Option<String>,
+    /// Selenoid: extra `/etc/hosts` entries, e.g. `["foo:1.2.3.4"]`.
+    /// Merged with `Browser.hosts` from browsers.json.
+    #[serde(default)]
+    pub hosts_entries: Vec<String>,
+    /// Selenoid: per-session DNS servers; maps to `HostConfig.Dns`.
+    #[serde(default)]
+    pub dns_servers: Vec<String>,
+    /// Selenoid: container names mica should `--link` into the session.
+    #[serde(default)]
+    pub application_containers: Vec<String>,
+    /// Selenoid: additional Docker networks to attach the session
+    /// container to (post-create).
+    #[serde(default)]
+    pub additional_networks: Vec<String>,
     #[serde(default)]
     pub env: Vec<String>,
     #[serde(default)]

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use mica::events::{ArtifactKind, EventBus, FileCreated};
 use mica::upload::{UploadListener, Uploader};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -12,9 +12,9 @@ struct RecordingUploader {
 
 #[async_trait]
 impl Uploader for RecordingUploader {
-    async fn upload(&self, _path: &Path, session_id: &str) -> anyhow::Result<()> {
+    async fn upload(&self, e: &FileCreated) -> anyhow::Result<()> {
         self.count.fetch_add(1, Ordering::SeqCst);
-        *self.last_session.lock().await = Some(session_id.to_string());
+        *self.last_session.lock().await = Some(e.session_id.clone());
         Ok(())
     }
 }
@@ -34,6 +34,9 @@ async fn upload_listener_runs_on_file_created() {
         path: PathBuf::from("video/sid-A.mp4"),
         session_id: "sid-A".into(),
         kind: ArtifactKind::Video,
+        browser: Some("chrome".into()),
+        browser_version: Some("126.0".into()),
+        s3_key_pattern: None,
     })
     .await;
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;

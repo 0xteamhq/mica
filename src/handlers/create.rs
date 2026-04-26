@@ -175,6 +175,7 @@ pub async fn create_session(
     let video_dir = state.args.video_output_dir.clone();
     let log_dir = state.args.log_output_dir.clone();
     let delete_timeout = state.args.session_delete_timeout;
+    let s3_key_pattern_for_cancel = caps.s3_key_pattern.clone();
     let cancel = Box::new(move || {
         // Release the queue slot regardless of stopper outcome.
         if let Ok(mut g) = permit_for_cancel.lock() {
@@ -211,6 +212,9 @@ pub async fn create_session(
                             path,
                             session_id: sid.clone(),
                             kind,
+                            browser: Some(browser.clone()),
+                            browser_version: Some(version.clone()),
+                            s3_key_pattern: s3_key_pattern_for_cancel.clone(),
                         })
                         .await;
                 }

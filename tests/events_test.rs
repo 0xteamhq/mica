@@ -41,6 +41,9 @@ async fn emit_fans_out_to_all_listeners() {
         path: PathBuf::from("video/sid.mp4"),
         session_id: "sid".into(),
         kind: ArtifactKind::Video,
+        browser: None,
+        browser_version: None,
+        s3_key_pattern: None,
     })
     .await;
     bus.emit_session(SessionStopped {

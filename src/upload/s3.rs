@@ -5,12 +5,12 @@
 //! for us when we feed `ByteStream::from_path`). Region falls through
 //! to the SDK's default credentials/region chain when `region` is empty.
 
-use super::Uploader;
+use super::{Uploader, render_template};
+use crate::events::FileCreated;
 use async_trait::async_trait;
 use aws_config::BehaviorVersion;
 use aws_sdk_s3::Client;
 use aws_sdk_s3::primitives::ByteStream;
-use std::path::Path;
 
 pub struct S3Uploader {
     client: Client,
@@ -37,11 +37,26 @@ impl S3Uploader {
         })
     }
 
-    fn key_for(&self, path: &Path, session_id: &str) -> String {
-        let name = path
+    /// Selenoid-parity key resolution:
+    /// 1. If `e.s3_key_pattern` is set, use it as the template
+    ///    (per-session override from `caps.s3KeyPattern`).
+    /// 2. Else if `--s3-prefix` looks like a template (contains `$`),
+    ///    use it.
+    /// 3. Else, fall back to the legacy `<prefix>/<file_name>` shape.
+    fn key_for(&self, e: &FileCreated) -> String {
+        if let Some(tpl) = e.s3_key_pattern.as_deref()
+            && !tpl.is_empty()
+        {
+            return render_template(tpl, e);
+        }
+        if self.prefix.contains('$') {
+            return render_template(&self.prefix, e);
+        }
+        let name = e
+            .path
             .file_name()
             .and_then(|s| s.to_str())
-            .unwrap_or(session_id);
+            .unwrap_or(&e.session_id);
         if self.prefix.is_empty() {
             name.to_string()
         } else {
@@ -52,9 +67,9 @@ impl S3Uploader {
 
 #[async_trait]
 impl Uploader for S3Uploader {
-    async fn upload(&self, path: &Path, session_id: &str) -> anyhow::Result<()> {
-        let key = self.key_for(path, session_id);
-        let body = ByteStream::from_path(path).await?;
+    async fn upload(&self, e: &FileCreated) -> anyhow::Result<()> {
+        let key = self.key_for(e);
+        let body = ByteStream::from_path(&e.path).await?;
         self.client
             .put_object()
             .bucket(&self.bucket)

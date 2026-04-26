@@ -215,6 +215,7 @@ impl Backend for DockerBackend {
 
         // T24: tmpfs / volumes / env / sysctl / shm size from browsers.json.
         let browser = &params.browser;
+        let caps = &params.caps;
         let tmpfs = if browser.tmpfs.is_empty() {
             None
         } else {
@@ -263,6 +264,34 @@ impl Backend for DockerBackend {
         } else {
             (Some(port_bindings), None)
         };
+        // Selenoid parity: hosts_entries from caps merge with browsers.json hosts.
+        let mut extra_hosts: Vec<String> = browser
+            .hosts
+            .iter()
+            .cloned()
+            .chain(caps.hosts_entries.iter().cloned())
+            .collect();
+        extra_hosts.sort();
+        extra_hosts.dedup();
+        let extra_hosts = if extra_hosts.is_empty() {
+            None
+        } else {
+            Some(extra_hosts)
+        };
+
+        let dns = if caps.dns_servers.is_empty() {
+            None
+        } else {
+            Some(caps.dns_servers.clone())
+        };
+
+        // Selenoid parity: applicationContainers becomes HostConfig.Links.
+        let links = if caps.application_containers.is_empty() {
+            None
+        } else {
+            Some(caps.application_containers.clone())
+        };
+
         let host_config = HostConfig {
             port_bindings: final_port_bindings,
             publish_all_ports,
@@ -273,24 +302,53 @@ impl Backend for DockerBackend {
             shm_size: shm,
             sysctls,
             network_mode,
-            extra_hosts: if browser.hosts.is_empty() {
-                None
-            } else {
-                Some(browser.hosts.clone())
-            },
+            extra_hosts,
+            dns,
+            links,
             privileged: Some(!self.disable_privileged),
             log_config: self.log_config.clone(),
             ..Default::default()
         };
 
-        let env: Vec<String> = browser
-            .env
-            .iter()
-            .cloned()
-            .chain(params.caps.env.iter().cloned())
-            .collect();
+        // Selenoid parity (service/docker.go:359-374): mica auto-injects
+        // standard env vars FIRST so browser.env and caps.env can override.
+        // Order: [auto-injected] -> browser.env -> caps.env (last wins).
+        let mut env: Vec<String> = Vec::new();
+        if let Some(tz) = &caps.time_zone
+            && !tz.is_empty()
+        {
+            env.push(format!("TZ={tz}"));
+        }
+        let video_size = caps
+            .video_screen_size
+            .clone()
+            .or_else(|| caps.screen_resolution.clone());
+        if let Some(res) = &caps.screen_resolution
+            && !res.is_empty()
+        {
+            env.push(format!("SCREEN_RESOLUTION={res}"));
+        }
+        if caps.enable_vnc {
+            env.push("ENABLE_VNC=true".to_string());
+        }
+        if caps.enable_video {
+            env.push("ENABLE_VIDEO=true".to_string());
+        }
+        if let Some(size) = &video_size {
+            env.push(format!("VIDEO_SIZE={size}"));
+        }
+        if let Some(codec) = &caps.video_codec
+            && !codec.is_empty()
+        {
+            env.push(format!("CODEC={codec}"));
+        }
+        if let Some(fr) = caps.video_frame_rate {
+            env.push(format!("VIDEO_FRAME_RATE={fr}"));
+        }
+        env.extend(browser.env.iter().cloned());
+        env.extend(caps.env.iter().cloned());
 
-        let labels: HashMap<String, String> = browser
+        let mut labels: HashMap<String, String> = browser
             .labels
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -299,9 +357,16 @@ impl Backend for DockerBackend {
                 ("mica.browser.version".into(), params.version.clone()),
             ])
             .collect();
+        // Selenoid parity (service/docker.go:423-437): test-name label.
+        if let Some(name) = &caps.name
+            && !name.is_empty()
+        {
+            labels.insert("name".into(), name.clone());
+        }
 
         let cfg = ContainerConfig::<String> {
             image: Some(image.clone()),
+            hostname: caps.container_hostname.clone().filter(|s| !s.is_empty()),
             env: if env.is_empty() { None } else { Some(env) },
             exposed_ports: Some(exposed_ports),
             host_config: Some(host_config),
@@ -317,7 +382,7 @@ impl Backend for DockerBackend {
             .map_err(|e| BackendError::Docker(format!("create {image}: {e}")))?;
         let id = create.id;
 
-        // T25: attach to custom network before start.
+        // T25: attach to the operator-configured custom network before start.
         if self.network != "default" {
             self.client
                 .connect_network(
@@ -330,6 +395,25 @@ impl Backend for DockerBackend {
                 .await
                 .map_err(|e| {
                     BackendError::Docker(format!("attach network {}: {e}", self.network))
+                })?;
+        }
+        // Selenoid parity: additionalNetworks from caps — also attached
+        // post-create. Each is independent of --container-network.
+        for net in &caps.additional_networks {
+            if net.is_empty() {
+                continue;
+            }
+            self.client
+                .connect_network(
+                    net,
+                    ConnectNetworkOptions {
+                        container: id.clone(),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .map_err(|e| {
+                    BackendError::Docker(format!("attach additional network {net}: {e}"))
                 })?;
         }
 
