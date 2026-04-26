@@ -45,11 +45,7 @@ async fn bridge(socket: WebSocket, port: String) {
     let to_tcp = async move {
         while let Some(Ok(msg)) = ws_rx.next().await {
             match msg {
-                Message::Binary(b) => {
-                    if tcp_tx.write_all(&b).await.is_err() {
-                        break;
-                    }
-                }
+                Message::Binary(b) if tcp_tx.write_all(&b).await.is_err() => break,
                 Message::Close(_) => break,
                 _ => {}
             }
