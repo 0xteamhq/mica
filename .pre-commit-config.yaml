@@ -1,0 +1,37 @@
+# Mica pre-commit config — runs via `prek` (https://github.com/j178/prek).
+# Activate locally:
+#   brew install prek          # or: cargo install prek
+#   prek install                # writes .git/hooks/pre-commit
+#
+# Bypass for one commit:  git commit --no-verify
+# CI runs `prek run --all-files` so you cannot escape it on PRs.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=512"]
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt --all
+        language: system
+        entry: cargo fmt --all --
+        files: \.rs$
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy --all-targets -- -D warnings
+        language: system
+        entry: cargo clippy --all-targets --quiet -- -D warnings
+        files: \.(rs|toml)$
+        pass_filenames: false
