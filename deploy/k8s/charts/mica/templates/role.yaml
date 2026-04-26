@@ -1,0 +1,33 @@
+{{- if and .Values.rbac.create (eq .Values.rbac.scope "namespace") -}}
+{{- $namespaces := prepend .Values.rbac.extraNamespaces .Release.Namespace | uniq -}}
+{{- range $namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "mica.fullname" $ }}
+  namespace: {{ . }}
+  labels:
+    {{- include "mica.labels" $ | nindent 4 }}
+rules:
+  # Browser session pods.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  # Per-session services (DNS handle for the headless port — P3.3).
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["create", "delete", "get"]
+  # browsers.json mounted from this ConfigMap.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get"]
+  # Lifecycle events for observability (P3 logs).
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create"]
+{{- end }}
+{{- end -}}

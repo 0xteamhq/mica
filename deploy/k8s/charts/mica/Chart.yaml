@@ -1,0 +1,20 @@
+apiVersion: v2
+name: mica
+description: Browser grid for the T-system. W3C WebDriver, single binary, scales 0 to N.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/0xteamhq/mica
+sources:
+  - https://github.com/0xteamhq/mica
+maintainers:
+  - name: 0xteam
+    url: https://github.com/0xteamhq
+keywords:
+  - selenium
+  - webdriver
+  - browser-grid
+  - playwright
+  - testing
+  - rust
+icon: https://raw.githubusercontent.com/0xteamhq/mica/main/.github/icon.png
