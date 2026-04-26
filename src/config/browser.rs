@@ -34,6 +34,11 @@ pub struct Browser {
     pub labels: HashMap<String, String>,
     #[serde(default)]
     pub sysctl: HashMap<String, String>,
+    /// Selenoid parity: when `true`, the container is started with
+    /// `--publish-all`, replacing the explicit `5900/7070/8080/9090`
+    /// port bindings mica sets by default.
+    #[serde(default)]
+    pub publish_all_ports: bool,
 }
 
 fn default_port() -> String {

@@ -24,6 +24,12 @@ pub struct Args {
     #[arg(long, default_value = "60s", value_parser = parse_duration)]
     pub timeout: Duration,
 
+    /// Maximum valid session idle timeout that a client can request via
+    /// `selenoid:options.sessionTimeout`. Caps that ask for more are
+    /// clamped to this.
+    #[arg(long, default_value = "1h", value_parser = parse_duration)]
+    pub max_timeout: Duration,
+
     /// Service startup timeout.
     #[arg(long, default_value = "30s", value_parser = parse_duration)]
     pub service_startup_timeout: Duration,
@@ -31,6 +37,11 @@ pub struct Args {
     /// New-session attempt timeout.
     #[arg(long, default_value = "30s", value_parser = parse_duration)]
     pub session_attempt_timeout: Duration,
+
+    /// Timeout for the upstream `DELETE /session/{id}` call we make
+    /// from the cancel hook (idle / DELETE / shutdown teardown paths).
+    #[arg(long, default_value = "30s", value_parser = parse_duration)]
+    pub session_delete_timeout: Duration,
 
     /// Number of new-session retries.
     #[arg(long, default_value_t = 1)]
@@ -71,6 +82,19 @@ pub struct Args {
     /// Save all container logs (not only sessions with `enableLog`).
     #[arg(long, default_value_t = false)]
     pub save_all_logs: bool,
+
+    /// Disable privileged container mode. Selenoid defaults to
+    /// `privileged=true`; mica is `false` by default and this flag
+    /// re-enables that strict policy. Phase-4 isolation drivers
+    /// override this when they require it (e.g. KVM device access).
+    #[arg(long, default_value_t = false)]
+    pub disable_privileged: bool,
+
+    /// Container log config as JSON, e.g.
+    /// `{"type":"json-file","config":{"max-size":"10m"}}`. Maps to
+    /// Docker's `HostConfig.LogConfig`.
+    #[arg(long, default_value = "", env = "MICA_LOG_CONF")]
+    pub log_conf: String,
 
     /// S3 bucket for artifact upload. Empty = upload disabled.
     #[arg(long, default_value = "", env = "MICA_S3_BUCKET")]

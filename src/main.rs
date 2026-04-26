@@ -82,7 +82,9 @@ async fn main() -> anyhow::Result<()> {
                     Some(args.log_output_dir.clone())
                 } else {
                     None
-                });
+                })
+                .with_disable_privileged(args.disable_privileged)
+                .with_log_conf(&args.log_conf);
             Arc::new(b)
         }
     };

@@ -21,6 +21,10 @@ pub struct Caps {
     pub log_name: Option<String>,
     pub time_zone: Option<String>,
     pub name: Option<String>,
+    /// Selenoid `selenoid:options.sessionTimeout` — overrides the
+    /// server's default idle timeout for this session, capped at
+    /// `--max-timeout`.
+    pub session_timeout: Option<String>,
     #[serde(default)]
     pub env: Vec<String>,
     #[serde(default)]

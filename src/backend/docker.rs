@@ -25,7 +25,7 @@ use bollard::container::{
     RemoveContainerOptions, StartContainerOptions, StopContainerOptions,
 };
 use bollard::image::CreateImageOptions;
-use bollard::models::{HostConfig, PortBinding};
+use bollard::models::{HostConfig, HostConfigLogConfig, PortBinding};
 use bollard::network::ConnectNetworkOptions;
 use futures::StreamExt;
 use std::collections::HashMap;
@@ -51,6 +51,12 @@ pub struct DockerBackend {
     /// T50 — when set, every container's stdout/stderr stream is
     /// captured to `<save_all_logs_dir>/<container_id>.log`.
     save_all_logs_dir: Option<String>,
+    /// Selenoid parity: privileged-by-default. When `true`, mica
+    /// drops the privileged flag on every container it creates.
+    disable_privileged: bool,
+    /// Selenoid parity: optional `HostConfig.LogConfig` JSON parsed
+    /// from the `--log-conf` CLI flag.
+    log_config: Option<HostConfigLogConfig>,
 }
 
 impl DockerBackend {
@@ -67,7 +73,32 @@ impl DockerBackend {
             service_startup_timeout: Duration::from_secs(30),
             stop_timeout_secs: 10,
             save_all_logs_dir: None,
+            disable_privileged: false,
+            log_config: None,
         })
+    }
+
+    /// Selenoid parity: turn off privileged mode for every container.
+    pub fn with_disable_privileged(mut self, off: bool) -> Self {
+        self.disable_privileged = off;
+        self
+    }
+
+    /// Selenoid parity: parse `--log-conf` JSON into a `HostConfigLogConfig`.
+    /// Format: `{"type":"json-file","config":{"max-size":"10m"}}`.
+    pub fn with_log_conf(mut self, raw: &str) -> Self {
+        if raw.is_empty() {
+            return self;
+        }
+        match serde_json::from_str::<HostConfigLogConfig>(raw) {
+            Ok(cfg) => {
+                self.log_config = Some(cfg);
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "ignoring invalid --log-conf JSON");
+            }
+        }
+        self
     }
 
     /// T50: capture container stdout/stderr into
@@ -224,8 +255,17 @@ impl Backend for DockerBackend {
             None
         };
 
+        // Selenoid parity: when `publishAllPorts` is set, drop our
+        // explicit port_bindings and let docker map every exposed
+        // port to a host-side ephemeral port.
+        let (final_port_bindings, publish_all_ports) = if browser.publish_all_ports {
+            (None, Some(true))
+        } else {
+            (Some(port_bindings), None)
+        };
         let host_config = HostConfig {
-            port_bindings: Some(port_bindings),
+            port_bindings: final_port_bindings,
+            publish_all_ports,
             memory,
             nano_cpus,
             tmpfs,
@@ -238,6 +278,8 @@ impl Backend for DockerBackend {
             } else {
                 Some(browser.hosts.clone())
             },
+            privileged: Some(!self.disable_privileged),
+            log_config: self.log_config.clone(),
             ..Default::default()
         };
 

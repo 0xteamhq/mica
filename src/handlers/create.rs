@@ -109,6 +109,19 @@ pub async fn create_session(
             ))
         })?;
 
+    // Selenoid parity: cap the per-session idle timeout that the
+    // client can request via `selenoid:options.sessionTimeout`. If
+    // unset, fall back to --timeout. If the requested value exceeds
+    // --max-timeout, clamp it.
+    let effective_timeout = match caps.session_timeout.as_deref() {
+        Some(s) if !s.is_empty() => match humantime::parse_duration(s) {
+            Ok(d) if d <= state.args.max_timeout => d,
+            Ok(_) => state.args.max_timeout,
+            Err(_) => state.args.timeout,
+        },
+        _ => state.args.timeout,
+    };
+
     // (4) Backend start
     let started: StartedSession = state
         .backend
@@ -161,6 +174,7 @@ pub async fn create_session(
     let session_started = SystemTime::now();
     let video_dir = state.args.video_output_dir.clone();
     let log_dir = state.args.log_output_dir.clone();
+    let delete_timeout = state.args.session_delete_timeout;
     let cancel = Box::new(move || {
         // Release the queue slot regardless of stopper outcome.
         if let Ok(mut g) = permit_for_cancel.lock() {
@@ -181,6 +195,7 @@ pub async fn create_session(
         tokio::spawn(async move {
             let _ = http
                 .delete(format!("{upstream}/session/{sid}"))
+                .timeout(delete_timeout)
                 .send()
                 .await;
             stopper.stop().await;
@@ -215,10 +230,18 @@ pub async fn create_session(
     });
 
     // Build the idle hook that triggers SessionMap::remove (which in
-    // turn fires the cancel hook above).
+    // turn fires the cancel hook above). Selenoid parity: log the
+    // [SESSION_TIMED_OUT] line from selenoid/selenoid.go:75 when
+    // the reaper fires.
     let sessions = state.sessions.clone();
     let session_id_for_idle = session_id.clone();
+    let request_id_for_idle = request_id.clone();
     let on_idle = Box::new(move || {
+        tracing::info!(
+            request_id = %request_id_for_idle,
+            session_id = %session_id_for_idle,
+            "[SESSION_TIMED_OUT]"
+        );
         let sessions = sessions.clone();
         let sid = session_id_for_idle.clone();
         tokio::spawn(async move {
@@ -233,7 +256,7 @@ pub async fn create_session(
         host_ports,
         browser_name.clone(),
         version.clone(),
-        state.args.timeout,
+        effective_timeout,
         on_idle,
         cancel,
     );
