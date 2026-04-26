@@ -1,0 +1,23 @@
+{
+  "firefox": {
+    "default": "126.0",
+    "versions": {
+      "126.0": {
+        "image": "selenoid/firefox:126.0",
+        "port": "4444",
+        "path": "/wd/hub",
+        "tmpfs": {"/tmp": "size=512m"},
+        "volumes": ["/etc/hosts:/etc/hosts:ro"],
+        "env": ["TZ=UTC"],
+        "shmSize": 268435456
+      }
+    }
+  },
+  "chrome": {
+    "default": "125.0",
+    "versions": {
+      "125.0": {"image": "selenoid/chrome:125.0", "port": "4444", "path": "/"},
+      "124.0": {"image": "selenoid/chrome:124.0", "port": "4444", "path": "/"}
+    }
+  }
+}

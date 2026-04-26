@@ -1,0 +1,50 @@
+[package]
+name = "mica"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+description = """
+Mica is a Selenoid-compatible browser grid written in Rust. It runs as a single \
+Docker container locally and in production, exposes the W3C WebDriver protocol on \
+/wd/hub, and launches one browser sandbox per session through a pluggable backend \
+(Docker, Kubernetes, Firecracker / Cloud Hypervisor / Kata / gVisor). The same \
+binary scales 0 → N globally with no vendor lock-in: cold-start floor ranges from \
+~200 ms (microVM + snapshot on Fly / bare-metal) to ~400 ms (gVisor on stock \
+managed K8s). Drop-in replacement for aerokube/selenoid; foundation for higher \
+phases that add warm pools, microVM isolation, WASM plugins, and BiDi streaming.
+"""
+repository = "https://github.com/0xteam/mica"
+readme = "README.md"
+keywords = ["webdriver", "selenium", "browser", "grid", "docker"]
+categories = ["web-programming", "command-line-utilities"]
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", features = ["ws", "macros"] }
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.5", features = ["trace"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+bollard = "0.16"
+dashmap = "6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive", "env"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+tokio-tungstenite = "0.23"
+futures = "0.3"
+thiserror = "1"
+anyhow = "1"
+uuid = { version = "1", features = ["v4"] }
+async-trait = "0.1"
+bytes = "1"
+humantime = "2"
+
+[dev-dependencies]
+wiremock = "0.6"
+tempfile = "3"
+serde_yaml = "0.9"
+http-body-util = "0.1"
