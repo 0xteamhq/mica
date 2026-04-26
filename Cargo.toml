@@ -5,11 +5,12 @@ edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"
 description = """
-Mica is a browser grid for the T-system. It runs as a single Rust binary and a \
-single Docker container — the same artifact you run locally is what runs in \
-production, anywhere in the world.
+A W3C-WebDriver-compatible browser grid in Rust. Single binary, single \
+Docker container, scales 0 → N. Backends for Docker and Kubernetes; \
+pluggable isolation drivers (runc, gVisor, Kata, microVMs).
 """
-repository = "https://github.com/0xteam/mica"
+repository = "https://github.com/0xteamhq/mica"
+homepage = "https://github.com/0xteamhq/mica"
 readme = "README.md"
 keywords = ["webdriver", "selenium", "browser", "grid", "docker"]
 categories = ["web-programming", "command-line-utilities"]
