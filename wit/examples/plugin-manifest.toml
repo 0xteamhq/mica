@@ -1,0 +1,32 @@
+# Example: how mica's main config (browsers.json sibling) declares
+# plugins and grants. Format is illustrative for 0XT-78 — the
+# implementation MAY tweak field names. The capability set is
+# stable and matches `wit/host.wit`.
+#
+# CLI equivalent:
+#   mica --plugin /etc/mica/plugins/quota.wasm \
+#        --plugin-grants quota=state \
+#        --plugin /etc/mica/plugins/audit.wasm \
+#        --plugin-grants audit=s3-write,http-client \
+#        --plugin-config audit=/etc/mica/audit.toml
+
+[[plugins]]
+name = "quota"
+path = "/etc/mica/plugins/quota.wasm"
+grants = ["state"]                    # default `host-log` and `clock` always granted
+load = "required"                     # "required" (default) or "optional"
+
+[plugins.config]
+# Forwarded as `lifecycle.config.config` (list<header>).
+max-concurrent-sessions = "20"
+max-sessions-per-team = "5"
+
+[[plugins]]
+name = "audit"
+path = "/etc/mica/plugins/audit.wasm"
+grants = ["s3-write", "http-client"]
+load = "required"
+
+[plugins.config]
+audit-bucket = "mica-audit-logs"
+forward-url = "https://siem.example.com/ingest"

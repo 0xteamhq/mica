@@ -1,0 +1,36 @@
+package mica:plugin@0.1.0;
+
+/// Session-lifecycle hooks. Called by mica around the WebDriver
+/// new-session and session-end paths.
+interface session {
+  use types.{session-id, capabilities, session-info, plugin-error};
+
+  /// Decision returned from `on-create`:
+  /// - `accept(caps)` — proceed with the (possibly mutated) capabilities
+  /// - `reject(reason)` — refuse the session; mica returns 403 with `reason`
+  ///   to the WebDriver client (mapped to `session not created`).
+  variant capabilities-decision {
+    accept(capabilities),
+    reject(string),
+  }
+
+  /// Called BEFORE mica spawns the browser container. Plugins can:
+  /// - Mutate caps (e.g. force `enableVideo`, inject env vars)
+  /// - Reject the session (auth, quota, allow-list)
+  ///
+  /// Hooks are invoked in plugin-load order. Each plugin sees the caps
+  /// produced by the previous plugin. The first `reject` short-circuits
+  /// the chain; subsequent plugins are not called.
+  ///
+  /// Total time budget across all plugin on-create hooks is bounded by
+  /// `--plugin-on-create-timeout` (default 5s). Exceeding it is treated
+  /// as a transient error and mica returns 503.
+  on-create: func(session: session-id, caps: capabilities)
+    -> result<capabilities-decision, plugin-error>;
+
+  /// Called AFTER a session has stopped (idle teardown, explicit DELETE,
+  /// timeout). Best-effort — invoked from a tokio::spawn so a slow
+  /// plugin can't stall mica's session map. A returned error is
+  /// logged at warn level; mica does not retry.
+  on-end: func(info: session-info) -> result<_, plugin-error>;
+}

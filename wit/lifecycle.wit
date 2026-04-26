@@ -1,0 +1,28 @@
+package mica:plugin@0.1.0;
+
+/// Plugin lifecycle. Called by mica at startup / shutdown.
+interface lifecycle {
+  use types.{plugin-error, header};
+
+  /// Per-plugin configuration mica forwards from its config file.
+  ///
+  /// `name` is the plugin's logical name (matches `--plugin-grants <name>=...`).
+  /// `config` is the raw `[plugins.<name>]` table flattened to key/value pairs.
+  record config {
+    name: string,
+    version: string,
+    config: list<header>,
+  }
+
+  /// Called once after the plugin is instantiated and before any other
+  /// hook fires. Plugins should validate their config here; returning
+  /// an error fails plugin load and mica refuses to start (or skips
+  /// the plugin if `--plugin-load=optional`).
+  init: func(cfg: config) -> result<_, plugin-error>;
+
+  /// Called once during graceful shutdown. The host gives the plugin
+  /// up to `--plugin-shutdown-timeout` to flush state. After that the
+  /// component is dropped. shutdown MUST NOT panic; errors are logged
+  /// at warn level and the host proceeds.
+  shutdown: func();
+}

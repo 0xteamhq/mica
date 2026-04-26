@@ -1,0 +1,98 @@
+package mica:plugin@0.1.0;
+
+/// Shared types used across the plugin contract.
+///
+/// Records mirror mica's internal Rust types (src/caps.rs, src/events.rs)
+/// so the host-side glue is a thin transcode rather than a real
+/// translation layer.
+interface types {
+  /// Session identifier — currently mica's WebDriver session id (UUID).
+  type session-id = string;
+
+  /// Wall-clock instant. Seconds + nanoseconds since the Unix epoch.
+  /// Mirrors `std::time::SystemTime`. Use the `clock` import to
+  /// get one from the host; do NOT trust the plugin's wasi:clocks
+  /// without it (some hosts may sandbox time).
+  record instant {
+    seconds: u64,
+    nanos: u32,
+  }
+
+  /// Single key/value pair. Used for headers, env, labels — anywhere
+  /// the source map allows duplicates (HTTP headers do, env doesn't,
+  /// labels don't, but a list keeps the wire format uniform).
+  record header {
+    name: string,
+    value: string,
+  }
+
+  /// WebDriver / Selenoid capabilities mica parses out of a new-session
+  /// request body. Mirrors `mica::caps::Caps`. Optional fields use
+  /// `option<...>`; absent and present-but-empty are distinct.
+  record capabilities {
+    browser-name: option<string>,
+    browser-version: option<string>,
+    platform: option<string>,
+    enable-vnc: bool,
+    enable-video: bool,
+    enable-log: bool,
+    screen-resolution: option<string>,
+    video-name: option<string>,
+    log-name: option<string>,
+    time-zone: option<string>,
+    name: option<string>,
+    env: list<string>,
+    labels: list<header>,
+  }
+
+  /// Kind of artifact mica produced for a session.
+  enum artifact-kind {
+    video,
+    log,
+  }
+
+  /// Artifact mica wrote to local disk. Path is host-side; plugins
+  /// running in the WASM sandbox cannot read it directly without an
+  /// explicit `file-read` capability grant (not provided by default).
+  record file-info {
+    path: string,
+    session-id: session-id,
+    kind: artifact-kind,
+    size-bytes: u64,
+  }
+
+  /// Session metadata at end-of-session.
+  record session-info {
+    session-id: session-id,
+    started: instant,
+    finished: instant,
+    browser: option<string>,
+    browser-version: option<string>,
+  }
+
+  /// Plugin-side error. `code` is a stable identifier the host can
+  /// log/match on; `message` is human-readable. Use `transient` for
+  /// errors mica should retry.
+  record plugin-error {
+    code: string,
+    message: string,
+    transient: bool,
+  }
+
+  /// HTTP request — used both by the `http` middleware export and
+  /// the `http-client` host import. Body is bytes; the empty list
+  /// means no body. Headers permit duplicates (per RFC 9110 § 5.2).
+  record http-request {
+    method: string,
+    path: string,
+    headers: list<header>,
+    body: list<u8>,
+  }
+
+  /// HTTP response. Same conventions as `http-request`.
+  record http-response {
+    status: u16,
+    headers: list<header>,
+    body: list<u8>,
+  }
+}

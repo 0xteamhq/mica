@@ -1,0 +1,41 @@
+package mica:plugin@0.1.0;
+
+/// HTTP middleware hooks. Called by mica around the WebDriver proxy
+/// (src/handlers/proxy.rs) so plugins can inspect / mutate / short-
+/// circuit traffic between the WebDriver client and the browser
+/// container.
+///
+/// SCOPE: only the `/wd/hub/session/...` proxy path is intercepted.
+/// `/ping`, `/status`, `/vnc/*`, `/video/*`, `/logs/*`, `/devtools/*`
+/// are not — they bypass plugins for latency reasons.
+interface http {
+  use types.{http-request, http-response, plugin-error};
+
+  /// What to do with an incoming request.
+  variant request-action {
+    /// Forward unmodified.
+    pass,
+    /// Forward this (possibly mutated) request instead.
+    modify(http-request),
+    /// Don't forward — respond directly to the client.
+    short-circuit(http-response),
+  }
+
+  /// What to do with an upstream response on its way back.
+  variant response-action {
+    pass,
+    modify(http-response),
+  }
+
+  /// Called BEFORE mica forwards the request to the browser container.
+  /// Plugins run in load order; each sees the previous plugin's output.
+  /// First `short-circuit` wins.
+  intercept-request: func(req: http-request)
+    -> result<request-action, plugin-error>;
+
+  /// Called AFTER the upstream response is received and BEFORE it is
+  /// returned to the client. Plugins run in load order; each sees the
+  /// previous plugin's output.
+  intercept-response: func(req: http-request, resp: http-response)
+    -> result<response-action, plugin-error>;
+}

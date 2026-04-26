@@ -1,0 +1,26 @@
+package mica:plugin@0.1.0;
+
+/// The world a mica plugin targets.
+///
+/// All `export` interfaces are OPTIONAL — a plugin only implements
+/// the hooks it cares about. wit-bindgen generates default `pass`
+/// stubs for the rest. (Mica's host detects which interfaces a
+/// component actually exports and skips the rest at dispatch.)
+///
+/// `import host-log` and `import clock` are always linked. The other
+/// imports are linked only when the operator grants the matching
+/// capability via `--plugin-grants <name>=http-client,s3-write,state`.
+/// A plugin importing a non-granted capability fails to instantiate
+/// at startup with a clear error.
+world plugin {
+  import host-log;
+  import clock;
+  import http-client;
+  import s3-write;
+  import state;
+
+  export lifecycle;
+  export session;
+  export artifact;
+  export http;
+}

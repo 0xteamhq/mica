@@ -1,0 +1,41 @@
+package mica:plugin@0.1.0;
+
+/// Artifact (video / log) handler. Called by mica's EventBus
+/// (src/events.rs) when a session writes a file. Lets plugins
+/// override where the artifact lands instead of (or in addition to)
+/// the built-in S3Uploader.
+interface artifact {
+  use types.{file-info, plugin-error};
+
+  /// Where the artifact should be uploaded.
+  ///
+  /// - `keep` — leave the file as-is. mica's built-in S3Uploader (if
+  ///   configured) will still run.
+  /// - `skip` — drop the artifact. mica deletes the local file and
+  ///   does NOT invoke the built-in S3Uploader.
+  /// - `s3` — upload to a specific S3 destination (overrides the
+  ///   default bucket / key derived from `MICA_S3_BUCKET`).
+  /// - `custom-uri` — opaque URI for plugins implementing their own
+  ///   sink (gcs://, azure://, file://, etc.). The plugin is
+  ///   responsible for the actual transfer; mica just records the URI
+  ///   in its session metadata.
+  variant upload-destination {
+    keep,
+    skip,
+    s3(s3-target),
+    custom-uri(string),
+  }
+
+  record s3-target {
+    bucket: string,
+    key: string,
+    region: option<string>,
+  }
+
+  /// Called once per `FileCreated` event. The first plugin to return
+  /// anything other than `keep` wins; subsequent plugins are skipped
+  /// for this artifact. If all plugins return `keep`, mica falls
+  /// through to the built-in S3Uploader.
+  on-file-created: func(file: file-info)
+    -> result<upload-destination, plugin-error>;
+}
