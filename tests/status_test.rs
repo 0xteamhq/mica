@@ -46,6 +46,7 @@ fn args() -> Args {
         isolation: "auto".into(),
         plugin_dir: String::new(),
         users: String::new(),
+        plugin_grants: String::new(),
     }
 }
 

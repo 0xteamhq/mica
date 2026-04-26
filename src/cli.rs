@@ -151,6 +151,16 @@ pub struct Args {
     #[arg(long, default_value = "", env = "MICA_PLUGIN_DIR")]
     pub plugin_dir: String,
 
+    /// Per-plugin capability grants. Comma-separated `<plugin>=<cap>[,<cap>...]`
+    /// pairs joined by `;`. Example:
+    /// `--plugin-grants gcs=http-client,state;auth=http-client`.
+    /// Capabilities: `host-log` and `clock` are always granted;
+    /// the gated set is `http-client`, `s3-write`, `state`. A plugin
+    /// importing a capability not in its grant set fails to
+    /// instantiate at startup with a clear error.
+    #[arg(long, default_value = "", env = "MICA_PLUGIN_GRANTS")]
+    pub plugin_grants: String,
+
     /// htpasswd file gating every WebDriver / VNC / artifact / relay
     /// endpoint with HTTP Basic auth. Empty = open. Reloaded on
     /// SIGHUP alongside browsers.json. Health (/healthz, /readyz),

@@ -125,7 +125,8 @@ async fn main() -> anyhow::Result<()> {
     // short-circuits the built-in S3Uploader.
     let mut state = state;
     if !args.plugin_dir.is_empty() {
-        match mica::plugins::PluginHost::new() {
+        let grants = mica::plugins::GrantTable::parse(&args.plugin_grants);
+        match mica::plugins::PluginHost::with_grants(grants) {
             Ok(host) => {
                 let path = std::path::PathBuf::from(&args.plugin_dir);
                 if let Err(e) = host.load_dir(&path).await {

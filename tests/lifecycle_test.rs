@@ -52,6 +52,7 @@ fn args_with(timeout_ms: u64, retry_count: u32) -> Args {
         isolation: "auto".into(),
         plugin_dir: String::new(),
         users: String::new(),
+        plugin_grants: String::new(),
     }
 }
 
