@@ -12,4 +12,5 @@ pub mod queue;
 pub mod session;
 pub mod shutdown;
 pub mod state;
+pub mod streaming;
 pub mod upload;

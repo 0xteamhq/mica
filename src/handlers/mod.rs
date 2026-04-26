@@ -9,6 +9,7 @@
 //! M9 will add /status, /vnc/{id}, /video, /logs, and the relay group.
 
 pub mod artifacts;
+pub mod bidi;
 pub mod create;
 pub mod ping;
 pub mod proxy;
@@ -35,6 +36,8 @@ pub fn router(state: AppState) -> Router {
         )
         // M9 T38 — VNC websocket bridge
         .route("/vnc/:session_id", get(vnc::vnc))
+        // P6.1 — BiDi websocket multiplex
+        .route("/session/:session_id/bidi", get(bidi::bidi))
         // M9 T39 — video file server
         .route("/video/:name", get(artifacts::get_video))
         .route("/video/:name", delete(artifacts::delete_video))
