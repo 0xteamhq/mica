@@ -1,0 +1,20 @@
+# Sample mica plugin: injects an X-Tenant-ID header onto every
+# upstream request based on the inbound Authorization header. Builds
+# to a wasm32-wasip2 component via `cargo component build`.
+[package]
+name = "mica-plugin-auth-header"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = "0.36"
+
+[package.metadata.component]
+package = "mica:plugin"
+
+[package.metadata.component.target]
+path = "../../../wit"

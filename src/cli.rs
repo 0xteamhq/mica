@@ -122,4 +122,8 @@ pub struct Args {
     /// | kata | firecracker | cloud_hypervisor.
     #[arg(long, default_value = "auto", env = "MICA_ISOLATION")]
     pub isolation: String,
+
+    /// Directory of `.wasm` plugin components. Empty = no plugins.
+    #[arg(long, default_value = "", env = "MICA_PLUGIN_DIR")]
+    pub plugin_dir: String,
 }

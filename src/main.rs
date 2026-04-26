@@ -109,6 +109,22 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!(bucket = %args.s3_bucket, "S3 uploader enabled");
     }
 
+    // Phase 5: load WASM plugins from --plugin-dir.
+    if !args.plugin_dir.is_empty() {
+        match mica::plugins::PluginHost::new() {
+            Ok(host) => {
+                let path = std::path::PathBuf::from(&args.plugin_dir);
+                if let Err(e) = host.load_dir(&path).await {
+                    tracing::warn!(error = %e, "plugin dir scan failed");
+                } else {
+                    let names = host.loaded_names().await;
+                    tracing::info!(plugins = ?names, "WASM plugins loaded");
+                }
+            }
+            Err(e) => tracing::warn!(error = %e, "wasmtime engine init failed; plugins disabled"),
+        }
+    }
+
     // T51: SIGHUP -> reload browsers.json. arc-swap lets us flip the
     // Arc<Config> without holding any locks on the hot path.
     #[cfg(unix)]

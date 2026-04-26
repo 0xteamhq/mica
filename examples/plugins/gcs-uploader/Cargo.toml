@@ -1,0 +1,21 @@
+# Sample mica plugin: uploads finalized artifacts to GCS instead of
+# (or in addition to) the built-in S3 uploader. Demonstrates that
+# mica's WASM plugin host is the right place for "alternative
+# uploaders" rather than baking each provider into the orchestrator.
+[package]
+name = "mica-plugin-gcs-uploader"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = "0.36"
+
+[package.metadata.component]
+package = "mica:plugin"
+
+[package.metadata.component.target]
+path = "../../../wit"
