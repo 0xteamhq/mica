@@ -58,6 +58,21 @@ impl Session {
         Self::new_inner(id, upstream, Duration::from_secs(60), None, Some(cancel))
     }
 
+    /// Full-featured session: idle watcher fires `on_idle` after
+    /// `idle` of inactivity, and `cancel` runs exactly once on
+    /// `SessionMap::remove`.
+    pub fn new_with_idle_and_cancel(
+        id: &str,
+        upstream: String,
+        idle: Duration,
+        on_idle: IdleCallback,
+        cancel: CancelCallback,
+    ) -> Self {
+        let s = Self::new_inner(id, upstream, idle, Some(on_idle), Some(cancel));
+        s.spawn_idle_watcher();
+        s
+    }
+
     fn new_inner(
         id: &str,
         upstream: String,

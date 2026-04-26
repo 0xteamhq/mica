@@ -8,4 +8,5 @@ pub mod handlers;
 pub mod queue;
 pub mod session;
 pub mod shutdown;
+pub mod state;
 pub mod upload;

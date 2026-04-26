@@ -10,14 +10,14 @@ fn start_time() -> SystemTime {
 }
 
 #[derive(Serialize)]
-struct Pong {
+pub struct Pong {
     uptime: String,
     #[serde(rename = "lastReloadTime")]
     last_reload_time: String,
     version: &'static str,
 }
 
-async fn ping() -> Json<Pong> {
+pub async fn ping() -> Json<Pong> {
     let elapsed = SystemTime::now()
         .duration_since(start_time())
         .unwrap_or(Duration::ZERO);
