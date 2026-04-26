@@ -1,20 +1,34 @@
 //! WASM plugin host (P5.1, P5.2).
 //!
-//! `wasmtime` 26 + WASI Preview 2 + Component Model. The full WIT
-//! contract lives at `wit/mica.wit`. This file's `PluginHost`
-//! manages a config-driven directory of `.wasm` components and
-//! exposes a typed-ish API for the rest of mica to call.
+//! `wasmtime` 26 + WASI Preview 2 + Component Model. The plugin
+//! contract lives in `wit/` (`world plugin` from `world.wit` — the
+//! split-file layout supersedes the legacy monolithic `mica.wit`).
 //!
-//! Phase-5 scope:
-//! - `PluginHost::load_dir(dir)` instantiates every `.wasm` it
-//!   finds, calls each plugin's `lifecycle.init`, and registers
-//!   it on the EventBus as a `FileCreatedListener` +
-//!   `SessionStoppedListener`.
-//! - `--plugin-dir` CLI flag wires it up from `main.rs`.
-//! - Capability grants land via `--plugin-grants <name>=<caps>`
-//!   in a follow-up commit; today every plugin gets a clean
-//!   default WASI context (no FS / no network) which forces
-//!   plugin authors to declare imports up front.
+//! Status of this file:
+//! - `PluginHost::load_dir` parses every `.wasm` in `--plugin-dir`
+//!   and validates that each is a Component. Soft-fails per-file so
+//!   one broken plugin can't stall startup.
+//! - **Invocation is not wired yet.** Dispatching `lifecycle.init`,
+//!   `artifact.on-file-created`, `session.on-create`, and the http
+//!   middleware hooks requires:
+//!   1. host-side implementations of the always-granted imports
+//!      (`mica:plugin/host-log`, `mica:plugin/clock`)
+//!   2. capability-gated implementations of `http-client`,
+//!      `s3-write`, `state`, switched on by the
+//!      `--plugin-grants <name>=<caps>` CLI surface
+//!   3. transcode helpers between mica's Rust types
+//!      (`crate::events::FileCreated`, `crate::caps::Caps`) and
+//!      the WIT records in `types.wit`
+//!   4. handler-side wiring for the variant return types
+//!      (`upload-destination`, `request-action`,
+//!      `capabilities-decision`).
+//!
+//!   That's a separate, focused commit — load-only ships now.
+//!
+//! Plugins still serve a purpose at this stage: every component is
+//! validated (Wasm-component shape, world conformance against the
+//! WIT in `wit/`), so operators get a clear startup error if a
+//! plugin is malformed before any session traffic flows.
 
 use anyhow::Context;
 use std::path::{Path, PathBuf};
@@ -24,9 +38,9 @@ use wasmtime::Engine;
 use wasmtime::component::{Component, Linker};
 use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiView};
 
-/// One mica plugin: the loaded component + a per-plugin store. Stores
-/// hold the WASI context, so each plugin sees its own filesystem
-/// preopens and env without sharing state with peers.
+/// One mica plugin: the loaded component. Each invocation builds a
+/// fresh `Store<HostState>` so plugins can't observe each other's
+/// state.
 #[allow(dead_code)]
 pub struct Plugin {
     pub name: String,
@@ -92,7 +106,7 @@ impl PluginHost {
         let bytes = std::fs::read(path).with_context(|| format!("read {}", path.display()))?;
         let component = Component::from_binary(&self.engine, &bytes)
             .with_context(|| format!("parse component {}", path.display()))?;
-        // Validate the linker can resolve the imports — this fails
+        // Validate the linker can resolve the WASI imports — fails
         // cleanly when a plugin asks for a capability we haven't
         // wired host-side yet.
         let mut linker: Linker<HostState> = Linker::new(&self.engine);
