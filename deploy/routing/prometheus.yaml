@@ -1,0 +1,24 @@
+# Drop-in Prometheus scrape config that aggregates /status across the
+# fleet — replaces the ggr-ui daemon (formerly P7.2 / 0XT-84).
+# Mica's /status already emits total / used / queued / pending plus a
+# per-browser session list; relabel to expose them as gauges.
+scrape_configs:
+  - job_name: mica
+    metrics_path: /status
+    scheme: http
+    static_configs:
+      - targets:
+          - mica-1:4444
+          - mica-2:4444
+          - mica-3:4444
+        labels:
+          service: mica
+    metric_relabel_configs:
+      # /status is JSON, not Prometheus-shaped — point this at a
+      # JSON-to-Prom shim like https://github.com/prometheus-community/json_exporter
+      # in front of mica, or run `prometheus.yaml` against an
+      # OpenTelemetry collector with a json_path receiver. The point
+      # is: aggregation lives in your observability stack, not in a
+      # mica-specific daemon.
+      - action: keep
+        regex: ".*"

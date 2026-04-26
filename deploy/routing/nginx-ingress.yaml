@@ -1,0 +1,29 @@
+# K8s Ingress for mica with sticky sessions matched to the mica/owner
+# label set by K8sBackend (0XT-68 / P3.5). Routes /wd/hub/session/{id}
+# back to the replica that holds the in-memory SessionMap entry.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mica
+  namespace: mica
+  annotations:
+    nginx.ingress.kubernetes.io/affinity: cookie
+    nginx.ingress.kubernetes.io/affinity-mode: persistent
+    nginx.ingress.kubernetes.io/session-cookie-name: mica-owner
+    nginx.ingress.kubernetes.io/session-cookie-path: /wd/hub
+    # WebSocket support for /vnc, /session/{id}/bidi, /devtools.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: mica.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mica
+                port:
+                  number: 4444
