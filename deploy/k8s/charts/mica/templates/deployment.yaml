@@ -1,0 +1,200 @@
+{{- $listenPort := regexReplaceAll "^.*:" .Values.mica.listen "" | int -}}
+{{- if eq $listenPort 0 -}}{{- $listenPort = 4444 -}}{{- end -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mica.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mica.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "mica.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "mica.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/browsers: {{ include (print $.Template.BasePath "/configmap-browsers.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "mica.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: mica
+          image: {{ include "mica.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          args:
+            - --listen={{ .Values.mica.listen }}
+            - --conf=/etc/mica/browsers.json
+            - --limit={{ .Values.mica.limit }}
+            - --timeout={{ .Values.mica.timeout }}
+            - --service-startup-timeout={{ .Values.mica.serviceStartupTimeout }}
+            - --session-attempt-timeout={{ .Values.mica.sessionAttemptTimeout }}
+            - --retry-count={{ .Values.mica.retryCount }}
+            - --graceful-period={{ .Values.mica.gracefulPeriod }}
+            - --video-output-dir={{ .Values.persistence.video.mountPath }}
+            - --log-output-dir={{ .Values.persistence.logs.mountPath }}
+            - --container-network={{ .Values.mica.containerNetwork }}
+            {{- if .Values.mica.defaultCpu }}
+            - --cpu={{ .Values.mica.defaultCpu }}
+            {{- end }}
+            {{- if .Values.mica.defaultMemory }}
+            - --memory={{ .Values.mica.defaultMemory }}
+            {{- end }}
+            {{- if .Values.mica.saveAllLogs }}
+            - --save-all-logs
+            {{- end }}
+            {{- if .Values.mica.enableFileUpload }}
+            - --enable-file-upload
+            {{- end }}
+            {{- if .Values.mica.disableQueue }}
+            - --disable-queue
+            {{- end }}
+            {{- if gt (int .Values.mica.warmPool.min) 0 }}
+            - --warm-pool-min={{ .Values.mica.warmPool.min }}
+            - --warm-pool-max={{ .Values.mica.warmPool.max }}
+            - --warm-pool-idle-ttl={{ .Values.mica.warmPool.idleTtl }}
+            {{- end }}
+            {{- with .Values.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if or .Values.s3.bucket .Values.s3.region .Values.extraEnv }}
+          env:
+            {{- if .Values.s3.bucket }}
+            - name: MICA_S3_BUCKET
+              value: {{ .Values.s3.bucket | quote }}
+            {{- end }}
+            {{- if .Values.s3.region }}
+            - name: MICA_S3_REGION
+              value: {{ .Values.s3.region | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- if or .Values.s3.credentialsSecretName .Values.extraEnvFrom }}
+          envFrom:
+            {{- if .Values.s3.credentialsSecretName }}
+            - secretRef:
+                name: {{ .Values.s3.credentialsSecretName }}
+            {{- end }}
+            {{- with .Values.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ $listenPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            {{- toYaml .Values.probes.liveness | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            {{- toYaml .Values.probes.readiness | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: browsers-config
+              mountPath: /etc/mica
+              readOnly: true
+            - name: video
+              mountPath: {{ .Values.persistence.video.mountPath }}
+            - name: logs
+              mountPath: {{ .Values.persistence.logs.mountPath }}
+            - name: tmp
+              mountPath: /tmp
+            {{- if eq .Values.backend.mode "docker" }}
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: browsers-config
+          configMap:
+            name: {{ include "mica.fullname" . }}-browsers
+        - name: tmp
+          emptyDir: {}
+        {{- if eq .Values.persistence.video.type "emptyDir" }}
+        - name: video
+          emptyDir:
+            sizeLimit: {{ .Values.persistence.video.size }}
+        {{- else if eq .Values.persistence.video.type "hostPath" }}
+        - name: video
+          hostPath:
+            path: {{ .Values.persistence.video.hostPath }}
+            type: DirectoryOrCreate
+        {{- else if eq .Values.persistence.video.type "pvc" }}
+        - name: video
+          persistentVolumeClaim:
+            claimName: {{ include "mica.fullname" . }}-video
+        {{- end }}
+        {{- if eq .Values.persistence.logs.type "emptyDir" }}
+        - name: logs
+          emptyDir:
+            sizeLimit: {{ .Values.persistence.logs.size }}
+        {{- else if eq .Values.persistence.logs.type "hostPath" }}
+        - name: logs
+          hostPath:
+            path: {{ .Values.persistence.logs.hostPath }}
+            type: DirectoryOrCreate
+        {{- else if eq .Values.persistence.logs.type "pvc" }}
+        - name: logs
+          persistentVolumeClaim:
+            claimName: {{ include "mica.fullname" . }}-logs
+        {{- end }}
+        {{- if eq .Values.backend.mode "docker" }}
+        - name: docker-sock
+          hostPath:
+            path: {{ .Values.backend.docker.socketPath }}
+            type: Socket
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

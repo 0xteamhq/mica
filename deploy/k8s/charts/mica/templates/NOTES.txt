@@ -1,0 +1,43 @@
+mica {{ .Chart.AppVersion }} installed as release {{ .Release.Name }}.
+
+1. Find the service:
+
+   kubectl get svc -n {{ .Release.Namespace }} {{ include "mica.fullname" . }}
+
+{{- if .Values.ingress.enabled }}
+
+2. Reach mica via Ingress:
+
+{{- range .Values.ingress.hosts }}
+   http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}/wd/hub
+{{- end }}
+{{- else if eq .Values.service.type "ClusterIP" }}
+
+2. Port-forward locally:
+
+   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "mica.fullname" . }} 4444:{{ .Values.service.port }}
+   curl http://localhost:4444/ping
+{{- end }}
+
+3. Point any WebDriver client at:
+
+   http://<host>:{{ .Values.service.port }}/wd/hub
+
+4. Tail logs:
+
+   kubectl -n {{ .Release.Namespace }} logs -l app.kubernetes.io/instance={{ .Release.Name }} -f
+
+{{- if eq .Values.backend.mode "k8s" }}
+
+NOTE: backend.mode=k8s reserves RBAC for the K8sBackend (0XT-64). Until that
+ships, the chart deploys mica's HTTP layer but session create requests will
+fail. Set backend.mode=docker to mount /var/run/docker.sock from the node as
+an interim option.
+{{- end }}
+
+{{- if and (gt (int .Values.replicaCount) 1) (ne .Values.service.sessionAffinity "ClientIP") }}
+
+WARNING: replicaCount > 1 with sessionAffinity != ClientIP. Sessions are bound
+to the replica that created them until 0XT-68 lands. Either lower replicaCount
+to 1 or set service.sessionAffinity: ClientIP.
+{{- end }}

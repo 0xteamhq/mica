@@ -1,0 +1,219 @@
+## Default values for mica.
+
+image:
+  repository: ghcr.io/0xteamhq/mica
+  tag: ""              # defaults to .Chart.AppVersion when empty
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+## Number of mica replicas.
+##
+## Sessions are bound to the replica that created them until
+## multi-replica session ownership (0XT-68) lands. The Service below
+## sets sessionAffinity: ClientIP so a client keeps hitting the same
+## replica for the lifetime of a session.
+replicaCount: 3
+
+## Pod-level settings.
+podAnnotations: {}
+podLabels: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+## mica CLI flags. Anything left at its default below is omitted.
+mica:
+  listen: ":4444"
+  limit: 5
+  timeout: 60s
+  serviceStartupTimeout: 30s
+  sessionAttemptTimeout: 30s
+  retryCount: 1
+  gracefulPeriod: 300s
+  saveAllLogs: false
+  enableFileUpload: false
+  disableQueue: false
+  ## Warm pool (P2.3). Set min > 0 to enable.
+  warmPool:
+    min: 0
+    max: 0
+    idleTtl: 5m
+  ## Container network mica should attach browser containers to.
+  ## Only meaningful when running with the docker backend below.
+  containerNetwork: default
+  ## Default per-session resource defaults applied to spawned browser
+  ## containers. Empty = unlimited.
+  defaultCpu: ""
+  defaultMemory: ""
+
+## Backend mode.
+##
+## Today mica only ships with the Docker backend. Running in K8s with
+## docker = true mounts the node's /var/run/docker.sock into the pod
+## (hostPath), which works on docker-shim or sysbox nodes but is a
+## privileged pattern. The forward-looking K8sBackend (0XT-64) will
+## remove this requirement; the RBAC below is provisioned for it.
+backend:
+  ## "k8s" reserves the RBAC verbs for the future K8sBackend.
+  ## "docker" mounts /var/run/docker.sock from the node.
+  mode: k8s
+  docker:
+    socketPath: /var/run/docker.sock
+
+## browsers.json contents. Rendered into a ConfigMap and mounted at
+## /etc/mica/browsers.json. Override with your own browser images.
+browsersConfig:
+  chrome:
+    default: "125.0"
+    versions:
+      "125.0":
+        image: selenoid/chrome:125.0
+        port: "4444"
+        path: /
+  firefox:
+    default: "126.0"
+    versions:
+      "126.0":
+        image: selenoid/firefox:126.0
+        port: "4444"
+        path: /wd/hub
+        shmSize: 268435456
+
+## S3 uploader (P2). Empty bucket = upload disabled.
+s3:
+  bucket: ""
+  region: ""
+  ## Reference an existing secret with AWS_ACCESS_KEY_ID /
+  ## AWS_SECRET_ACCESS_KEY. Leave empty to use IRSA / pod identity.
+  credentialsSecretName: ""
+
+## Service account.
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  ## Set to false if K8s admission policies require automounting only
+  ## when explicitly opted in.
+  automount: true
+
+## RBAC.
+rbac:
+  ## Whether to create the Role/ClusterRole + binding.
+  create: true
+  ## "namespace" creates a Role + RoleBinding scoped to the release
+  ## namespace. "cluster" creates a ClusterRole + ClusterRoleBinding
+  ## (multi-namespace tenancy or cluster-scoped resources).
+  scope: namespace
+  ## Extra namespaces a namespace-scoped Role should be replicated to.
+  ## Each entry creates a Role+RoleBinding in that namespace.
+  extraNamespaces: []
+
+## Service.
+service:
+  type: ClusterIP
+  port: 4444
+  ## ClientIP keeps a session pinned to a single replica until
+  ## multi-replica session ownership (0XT-68) lands.
+  sessionAffinity: ClientIP
+  sessionAffinityTimeoutSeconds: 10800   # 3h
+  annotations: {}
+
+## Ingress (example).
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: mica.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  ## - hosts: [mica.example.com]
+  ##   secretName: mica-tls
+
+## Resources. Generous defaults; tune to traffic.
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: "2"
+    memory: 1Gi
+
+## Liveness / readiness probes hit /ping on the listen port.
+probes:
+  liveness:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 6
+  readiness:
+    initialDelaySeconds: 1
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+## Storage for /video and /logs. emptyDir is the safe default —
+## artifacts are uploaded to S3 by the S3Uploader (P2) when configured.
+persistence:
+  video:
+    type: emptyDir         # emptyDir | pvc | hostPath
+    size: 10Gi
+    storageClass: ""
+    hostPath: /var/lib/mica/video
+    mountPath: /video
+  logs:
+    type: emptyDir
+    size: 5Gi
+    storageClass: ""
+    hostPath: /var/lib/mica/logs
+    mountPath: /logs
+
+## PodDisruptionBudget. Only created when replicaCount > 1.
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  ## Set maxUnavailable instead of minAvailable by setting one of them
+  ## here and clearing the other. Both null disables the PDB.
+  maxUnavailable: null
+
+## Pod scheduling.
+nodeSelector: {}
+tolerations: []
+## Default affinity spreads replicas across nodes (ticket: anti-affinity).
+## Set to {} to disable.
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: mica
+topologySpreadConstraints: []
+priorityClassName: ""
+
+## terminationGracePeriodSeconds — should match or exceed mica.gracefulPeriod
+## so in-flight sessions can drain before SIGKILL.
+terminationGracePeriodSeconds: 330
+
+## Extra env / envFrom / volumes / volumeMounts for advanced setups.
+extraEnv: []
+extraEnvFrom: []
+extraVolumes: []
+extraVolumeMounts: []
+extraArgs: []

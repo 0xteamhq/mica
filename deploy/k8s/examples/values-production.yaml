@@ -1,0 +1,80 @@
+## Production reference: 3 replicas, anti-affinity, ingress with TLS,
+## warm pool enabled, S3 uploads.
+##
+## Run as:
+##   helm upgrade --install mica deploy/k8s/charts/mica \
+##     -n mica --create-namespace \
+##     -f deploy/k8s/examples/values-production.yaml
+
+replicaCount: 3
+
+image:
+  repository: ghcr.io/0xteamhq/mica
+  tag: ""               # pinned via --set image.tag=<sha>
+  pullPolicy: IfNotPresent
+
+mica:
+  limit: 50
+  timeout: 120s
+  gracefulPeriod: 600s
+  saveAllLogs: true
+  warmPool:
+    min: 2
+    max: 6
+    idleTtl: 10m
+
+backend:
+  mode: k8s             # requires K8sBackend (0XT-64)
+
+s3:
+  bucket: mica-artifacts
+  region: us-east-1
+  ## IRSA / pod-identity is preferred over static creds:
+  credentialsSecretName: ""
+
+resources:
+  requests:
+    cpu: "1"
+    memory: 512Mi
+  limits:
+    cpu: "4"
+    memory: 2Gi
+
+service:
+  type: ClusterIP
+  sessionAffinity: ClientIP
+  sessionAffinityTimeoutSeconds: 10800
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  hosts:
+    - host: mica.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts: [mica.example.com]
+      secretName: mica-tls
+
+terminationGracePeriodSeconds: 660
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+  maxUnavailable: null
+
+rbac:
+  scope: namespace      # set to "cluster" for multi-tenant routing
+
+persistence:
+  video:
+    type: emptyDir
+    size: 20Gi
+  logs:
+    type: emptyDir
+    size: 10Gi

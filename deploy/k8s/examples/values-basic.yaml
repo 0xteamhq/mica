@@ -1,0 +1,25 @@
+## Minimal single-replica install for laptops / dev clusters.
+##
+## Run as:
+##   helm install mica deploy/k8s/charts/mica \
+##     -n mica --create-namespace \
+##     -f deploy/k8s/examples/values-basic.yaml
+
+replicaCount: 1
+
+backend:
+  mode: docker
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+ingress:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
