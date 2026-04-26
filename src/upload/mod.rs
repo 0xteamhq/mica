@@ -38,8 +38,7 @@ impl FileCreatedListener for UploadListener {
     }
 }
 
-/// Selenoid-compatible token substitution for S3 keys (Selenoid
-/// upload/s3.go:139-157). Recognized tokens:
+/// Token substitution for S3 keys. Recognized tokens:
 ///
 ///  - `$fileName`         — full file name (`abc.mp4`)
 ///  - `$fileNameWithoutExt` — without extension (`abc`)

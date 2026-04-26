@@ -264,7 +264,7 @@ impl Backend for DockerBackend {
         } else {
             (Some(port_bindings), None)
         };
-        // Selenoid parity: hosts_entries from caps merge with browsers.json hosts.
+        // hosts_entries from caps merge with browsers.json hosts.
         let mut extra_hosts: Vec<String> = browser
             .hosts
             .iter()
@@ -285,7 +285,7 @@ impl Backend for DockerBackend {
             Some(caps.dns_servers.clone())
         };
 
-        // Selenoid parity: applicationContainers becomes HostConfig.Links.
+        // applicationContainers becomes HostConfig.Links.
         let links = if caps.application_containers.is_empty() {
             None
         } else {
@@ -310,9 +310,9 @@ impl Backend for DockerBackend {
             ..Default::default()
         };
 
-        // Selenoid parity (service/docker.go:359-374): mica auto-injects
-        // standard env vars FIRST so browser.env and caps.env can override.
-        // Order: [auto-injected] -> browser.env -> caps.env (last wins).
+        // Auto-inject standard env vars FIRST so browser.env and
+        // caps.env can override (last wins). The order is:
+        //   [auto-injected] -> browser.env -> caps.env.
         let mut env: Vec<String> = Vec::new();
         if let Some(tz) = &caps.time_zone
             && !tz.is_empty()
@@ -357,7 +357,7 @@ impl Backend for DockerBackend {
                 ("mica.browser.version".into(), params.version.clone()),
             ])
             .collect();
-        // Selenoid parity (service/docker.go:423-437): test-name label.
+        // test-name label so artifacts are identifiable.
         if let Some(name) = &caps.name
             && !name.is_empty()
         {
@@ -397,8 +397,8 @@ impl Backend for DockerBackend {
                     BackendError::Docker(format!("attach network {}: {e}", self.network))
                 })?;
         }
-        // Selenoid parity: additionalNetworks from caps — also attached
-        // post-create. Each is independent of --container-network.
+        // additionalNetworks from caps — attached post-create.
+        // Each is independent of --container-network.
         for net in &caps.additional_networks {
             if net.is_empty() {
                 continue;

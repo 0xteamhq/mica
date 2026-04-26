@@ -37,7 +37,7 @@ impl S3Uploader {
         })
     }
 
-    /// Selenoid-parity key resolution:
+    /// Key resolution order:
     /// 1. If `e.s3_key_pattern` is set, use it as the template
     ///    (per-session override from `caps.s3KeyPattern`).
     /// 2. Else if `--s3-prefix` looks like a template (contains `$`),

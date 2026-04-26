@@ -14,12 +14,12 @@ pub struct FileCreated {
     pub path: PathBuf,
     pub session_id: String,
     pub kind: ArtifactKind,
-    /// Selenoid parity: per-session metadata that S3-key templates
+    /// Per-session metadata that S3-key templates
     /// interpolate. Optional so synthetic `FileCreated` events
     /// (tests, plugins) can leave them unset.
     pub browser: Option<String>,
     pub browser_version: Option<String>,
-    /// Selenoid `caps.s3KeyPattern` — if set, overrides the global
+    /// `caps.s3KeyPattern` — if set, overrides the global
     /// `--s3-prefix` template for this session's artifacts.
     pub s3_key_pattern: Option<String>,
 }

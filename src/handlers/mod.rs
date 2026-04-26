@@ -25,7 +25,7 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         // M1 + M9 T37
         .route("/ping", get(ping::ping_with_state))
-        // M9 T36 + Selenoid parity: /wd/hub/status alias for Selenium 4 GridAdmin clients.
+        // M9 T36 + /wd/hub/status alias for Selenium 4 GridAdmin clients.
         .route("/status", get(status::status))
         .route("/wd/hub/status", get(status::status))
         // M8
