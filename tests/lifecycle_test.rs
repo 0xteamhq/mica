@@ -41,6 +41,10 @@ fn args_with(timeout_ms: u64, retry_count: u32) -> Args {
         warm_pool_min: 0,
         warm_pool_max: 16,
         warm_pool_idle_ttl: Duration::from_secs(300),
+        backend: "docker".into(),
+        k8s_namespace: "default".into(),
+        k8s_runtime_class: String::new(),
+        replica_id: String::new(),
     }
 }
 

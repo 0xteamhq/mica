@@ -95,4 +95,25 @@ pub struct Args {
     /// Idle TTL: pool entries older than this are evicted.
     #[arg(long, default_value = "5m", value_parser = parse_duration)]
     pub warm_pool_idle_ttl: Duration,
+
+    /// Backend driver: "docker" (default) or "k8s".
+    #[arg(long, default_value = "docker", env = "MICA_BACKEND")]
+    pub backend: String,
+
+    /// Kubernetes namespace (when --backend=k8s).
+    #[arg(long, default_value = "default", env = "MICA_K8S_NAMESPACE")]
+    pub k8s_namespace: String,
+
+    /// Kubernetes RuntimeClass name to set on session pods. Set to
+    /// "kata" for VM-grade isolation (Phase 4) or "gvisor" for the
+    /// stock-managed-K8s sandbox path. Empty = node default.
+    #[arg(long, default_value = "", env = "MICA_K8S_RUNTIME_CLASS")]
+    pub k8s_runtime_class: String,
+
+    /// Replica id stamped on every Pod's `mica/owner=<id>` label. Empty
+    /// = a per-process UUID. Set this from a downward-API field in
+    /// multi-replica deployments so Ingress can stick to the owning
+    /// mica replica.
+    #[arg(long, default_value = "", env = "MICA_REPLICA_ID")]
+    pub replica_id: String,
 }

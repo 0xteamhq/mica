@@ -14,6 +14,7 @@
 //! to capture state at start time to make stop work.
 
 pub mod docker;
+pub mod k8s;
 pub mod mock;
 
 use crate::caps::Caps;

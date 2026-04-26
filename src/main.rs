@@ -1,6 +1,7 @@
 use clap::Parser;
 use mica::backend::Backend;
 use mica::backend::docker::DockerBackend;
+use mica::backend::k8s::K8sBackend;
 use mica::cli::Args;
 use mica::config::Config;
 use mica::handlers;
@@ -28,18 +29,41 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let backend = DockerBackend::connect()
-        .await?
-        .with_network(args.container_network.clone())
-        .with_default_cpu(args.cpu.clone())
-        .with_default_memory(args.memory.clone())
-        .with_service_startup_timeout(args.service_startup_timeout)
-        .with_save_all_logs(if args.save_all_logs {
-            Some(args.log_output_dir.clone())
-        } else {
-            None
-        });
-    let docker_backend: Arc<dyn Backend> = Arc::new(backend);
+    let raw_backend: Arc<dyn Backend> = match args.backend.as_str() {
+        "k8s" => {
+            let replica = if args.replica_id.is_empty() {
+                None
+            } else {
+                Some(args.replica_id.clone())
+            };
+            let b = K8sBackend::connect(args.k8s_namespace.clone(), replica)
+                .await
+                .map_err(|e| anyhow::anyhow!("k8s backend: {e}"))?
+                .with_runtime_class(if args.k8s_runtime_class.is_empty() {
+                    None
+                } else {
+                    Some(args.k8s_runtime_class.clone())
+                })
+                .with_service_startup_timeout(args.service_startup_timeout);
+            tracing::info!(namespace = %args.k8s_namespace, replica_id = %b.replica_id(), "k8s backend selected");
+            Arc::new(b)
+        }
+        _ => {
+            let b = DockerBackend::connect()
+                .await?
+                .with_network(args.container_network.clone())
+                .with_default_cpu(args.cpu.clone())
+                .with_default_memory(args.memory.clone())
+                .with_service_startup_timeout(args.service_startup_timeout)
+                .with_save_all_logs(if args.save_all_logs {
+                    Some(args.log_output_dir.clone())
+                } else {
+                    None
+                });
+            Arc::new(b)
+        }
+    };
+    let docker_backend = raw_backend;
 
     // P2.3: when --warm-pool-min > 0, wrap DockerBackend with PooledBackend.
     let backend: Arc<dyn Backend> = if args.warm_pool_min > 0 {
