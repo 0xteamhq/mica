@@ -25,7 +25,7 @@ pub struct Args {
     pub timeout: Duration,
 
     /// Maximum valid session idle timeout that a client can request via
-    /// `selenoid:options.sessionTimeout`. Caps that ask for more are
+    /// `mica:options.sessionTimeout`. Caps that ask for more are
     /// clamped to this.
     #[arg(long, default_value = "1h", value_parser = parse_duration)]
     pub max_timeout: Duration,
@@ -83,10 +83,10 @@ pub struct Args {
     #[arg(long, default_value_t = false)]
     pub save_all_logs: bool,
 
-    /// Disable privileged container mode. Selenoid defaults to
-    /// `privileged=true`; mica is `false` by default and this flag
-    /// re-enables that strict policy. Phase-4 isolation drivers
-    /// override this when they require it (e.g. KVM device access).
+    /// Disable privileged container mode. mica is `false` by
+    /// default; this flag re-enables that strict policy. Phase-4
+    /// isolation drivers override it when they require it (e.g. KVM
+    /// device access).
     #[arg(long, default_value_t = false)]
     pub disable_privileged: bool,
 

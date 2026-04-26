@@ -50,8 +50,8 @@ async fn proxy(
         .ok_or_else(|| WdError::invalid_session_id(format!("unknown session: {session_id}")))?;
     session.touch();
 
-    // Selenoid parity: `POST /wd/hub/session/{id}/file` (and Selenium-4
-    // alias `/se/file`) goes to the container's fileserver port, not to
+    // `POST /wd/hub/session/{id}/file` (and Selenium-4 alias
+    // `/se/file`) goes to the container's fileserver port, not to
     // the upstream WebDriver. Gated by `--enable-file-upload`.
     if state.args.enable_file_upload
         && method == Method::POST
@@ -132,8 +132,7 @@ async fn proxy(
 
 /// File-upload forwarder: takes the body from
 /// `POST /wd/hub/session/{id}/file`, hands it to the container's
-/// fileserver port at `/file`. Selenoid does the same path rewrite
-/// at selenoid/selenoid.go:578.
+/// fileserver port at `/file`.
 async fn forward_to_fileserver(
     state: &AppState,
     port: &str,

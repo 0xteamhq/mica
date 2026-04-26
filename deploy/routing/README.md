@@ -17,7 +17,7 @@
 ## Example configs
 
 - `nginx-ingress.yaml` — K8s Ingress with cookie-based session affinity matched to the `mica/owner` label.
-- `haproxy.cfg` — HAProxy stick-table on the `X-Selenoid-Session-Id` header for non-K8s deployments.
+- `haproxy.cfg` — HAProxy stick-table on the `X-Mica-Session-Id` header for non-K8s deployments.
 - `cloudflare.tf` — Cloudflare Load Balancer with origin pools per region; sticky on the session-id header.
 
 ## Aggregated `/status` across the fleet (formerly P7.2)

@@ -58,8 +58,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=download /opt/chrome-headless-shell /opt/chrome-headless-shell
 RUN ln -s /opt/chrome-headless-shell/chrome-headless-shell /usr/local/bin/chrome-headless-shell
 
-# Standard WebDriver port (matches Selenoid expectations so existing
-# browsers.json entries plug in unchanged).
+# Standard WebDriver port — existing legacy `browsers.json` entries
+# expecting these ports plug in unchanged.
 EXPOSE 4444 5900 7070 8080 9090
 USER 1000:1000
 ENTRYPOINT ["/usr/local/bin/chrome-headless-shell", "--remote-debugging-port=9222", "--remote-debugging-address=0.0.0.0", "--no-sandbox"]

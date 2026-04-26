@@ -1,4 +1,4 @@
-//! GET /status — Selenoid-compatible grid health snapshot.
+//! GET /status — grid health snapshot.
 
 use crate::state::AppState;
 use axum::Json;

@@ -4,8 +4,8 @@ use thiserror::Error;
 
 /// Selenium / WebDriver capabilities, parsed from either the W3C
 /// `capabilities.alwaysMatch` block or the legacy `desiredCapabilities`
-/// block. Selenoid-specific options under `selenoid:options` are merged
-/// into the top level so callers see one flat struct.
+/// block. Mica-specific options under `mica:options` are merged into
+/// the top level so callers see one flat struct.
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Caps {
@@ -21,8 +21,8 @@ pub struct Caps {
     pub log_name: Option<String>,
     pub time_zone: Option<String>,
     pub name: Option<String>,
-    /// Selenoid `selenoid:options.sessionTimeout` — overrides the
-    /// server's default idle timeout for this session, capped at
+    /// `mica:options.sessionTimeout` — overrides the server's
+    /// default idle timeout for this session, capped at
     /// `--max-timeout`.
     pub session_timeout: Option<String>,
     #[serde(default)]
@@ -43,7 +43,7 @@ impl Caps {
     /// Parse a WebDriver new-session request body. W3C
     /// `capabilities.alwaysMatch` is preferred; `desiredCapabilities`
     /// is the legacy fallback. The legacy `version` key is mapped to
-    /// `browserVersion`. `selenoid:options` keys are merged onto the
+    /// `browserVersion`. `mica:options` keys are merged onto the
     /// base capabilities object before deserialization.
     pub fn parse(body: &Value) -> Result<Self, CapsError> {
         let raw = body
@@ -53,7 +53,7 @@ impl Caps {
             .ok_or(CapsError::Missing)?;
 
         let mut merged = raw.clone();
-        if let Some(ext) = raw.get("selenoid:options").cloned()
+        if let Some(ext) = raw.get("mica:options").cloned()
             && let (Value::Object(base), Value::Object(extra)) = (&mut merged, &ext)
         {
             for (k, v) in extra {

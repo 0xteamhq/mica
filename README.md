@@ -2,7 +2,7 @@
 
 A browser grid for the T-system. Single Rust binary, single Docker container, scales 0 → N globally, portable across cloud providers via pluggable isolation drivers. Speaks the W3C WebDriver protocol so existing test clients work unchanged.
 
-> **Status:** Phase 1 complete — Selenoid-shaped Docker backend, W3C wire protocol, idle/cancel/retry teardown, status & VNC & artifact endpoints, S3 uploader, graceful shutdown, SIGHUP config reload. Phase 2+ (warm pool, K8s, microVM isolation, WASM plugins, BiDi) tracked in Linear and `docs/plans/2026-04-26-mica-strategy.md`.
+> **Status:** Phase 1 complete — Docker backend, W3C wire protocol, idle/cancel/retry teardown, status & VNC & artifact endpoints, S3 uploader, graceful shutdown, SIGHUP config reload. Phase 2+ (warm pool, K8s, microVM isolation, WASM plugins, BiDi) tracked in Linear and `docs/plans/2026-04-26-mica-strategy.md`.
 
 ## Quick start
 
@@ -40,12 +40,12 @@ Then point any WebDriver client at `http://localhost:4444/wd/hub` (Selenium / Pl
 
 ## CLI flags
 
-Selenoid-compatible. Highlights:
+Highlights:
 
 | Flag | Default | Notes |
 |---|---|---|
 | `--listen` | `:4444` | Listen address. `:N` expands to `0.0.0.0:N`. |
-| `--conf` | `config/browsers.json` | Browser registry (Selenoid schema). |
+| `--conf` | `config/browsers.json` | Browser registry. |
 | `--limit` | `5` | Max parallel sessions. |
 | `--timeout` | `60s` | Session idle timeout. |
 | `--service-startup-timeout` | `30s` | How long to wait for the WebDriver port. |
@@ -78,7 +78,7 @@ Selenoid-compatible. Highlights:
 }
 ```
 
-Drop-in compatible with Selenoid's schema. `image` must be a string (driver-mode arrays are dropped — see Phase 1 plan T7). On `SIGHUP` mica reloads the file via `arc-swap` with no service interruption.
+`image` must be a string (legacy driver-mode arrays are dropped — see Phase 1 plan T7). On `SIGHUP` mica reloads the file via `arc-swap` with no service interruption.
 
 ## Local development
 
@@ -102,22 +102,16 @@ Docker integration tests are gated:
 MICA_DOCKER_TESTS=1 cargo test --test docker_integration -- --ignored
 ```
 
-## Comparison to Selenoid
+## Capabilities
 
-| | Selenoid | mica |
-|---|---|---|
-| Language | Go | Rust |
-| Docker backend | ✅ | ✅ |
-| W3C + legacy capabilities | ✅ | ✅ |
-| Per-session container, idle teardown, retry | ✅ | ✅ |
-| `browsers.json`, SIGHUP reload | ✅ | ✅ |
-| VNC / DevTools / clipboard / download relay | ✅ | ✅ |
-| Video / log file server | ✅ | ✅ |
-| S3 artifact upload | partial | ✅ (built-in) |
-| K8s native | ❌ (Moon) | Phase 3 |
-| Pluggable microVM isolation | ❌ | Phase 4 (Firecracker / Cloud Hypervisor / Kata / gVisor / runc) |
-| WASM plugin host | ❌ | Phase 5 |
-| BiDi + streaming artifacts | ❌ | Phase 6 |
+- **Docker backend** with W3C + legacy capabilities, per-session container, idle teardown, retry on transient upstream failures
+- **`browsers.json`** registry with `SIGHUP` hot reload
+- **VNC / DevTools / clipboard / download** reverse proxies
+- **Video / log file server** + built-in S3 artifact upload
+- **K8s native** backend (Phase 3 — done)
+- **Pluggable microVM isolation** (Phase 4 — Firecracker / Cloud Hypervisor / Kata / gVisor / runc)
+- **WASM plugin host** (Phase 5 — partial)
+- **BiDi + streaming artifacts** (Phase 6 — scaffolded)
 
 ## Roadmap
 

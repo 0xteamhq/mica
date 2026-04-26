@@ -1,10 +1,8 @@
 //! Session lifecycle types — `Session` and `SessionMap`.
 //!
-//! Selenoid keeps sessions in `Sessions` (selenoid/session/map.go) and
-//! drives idle timeouts from a per-session goroutine
-//! (selenoid/selenoid.go:74-95). We use a `DashMap` for the concurrent
-//! map and a per-session tokio task for idle watching, with a oneshot
-//! channel to cancel that watcher when the session is removed.
+//! `DashMap` for the concurrent map; a per-session tokio task drives
+//! the idle watcher, with a oneshot channel to cancel that watcher
+//! when the session is removed.
 //!
 //! Two callbacks are wired through the `Session`:
 //!
