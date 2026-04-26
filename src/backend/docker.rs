@@ -21,8 +21,8 @@ use super::{Backend, BackendError, HostPorts, StartParams, StartedSession, Stopp
 use async_trait::async_trait;
 use bollard::Docker;
 use bollard::container::{
-    Config as ContainerConfig, CreateContainerOptions, RemoveContainerOptions,
-    StartContainerOptions, StopContainerOptions,
+    Config as ContainerConfig, CreateContainerOptions, LogOutput, LogsOptions,
+    RemoveContainerOptions, StartContainerOptions, StopContainerOptions,
 };
 use bollard::image::CreateImageOptions;
 use bollard::models::{HostConfig, PortBinding};
@@ -31,6 +31,7 @@ use futures::StreamExt;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
+use tokio::io::AsyncWriteExt;
 
 const VNC_PORT: u16 = 5900;
 const DEVTOOLS_PORT: u16 = 7070;
@@ -47,6 +48,9 @@ pub struct DockerBackend {
     /// Stop timeout in seconds — sent to docker as the SIGTERM grace
     /// window before SIGKILL.
     stop_timeout_secs: i64,
+    /// T50 — when set, every container's stdout/stderr stream is
+    /// captured to `<save_all_logs_dir>/<container_id>.log`.
+    save_all_logs_dir: Option<String>,
 }
 
 impl DockerBackend {
@@ -62,7 +66,15 @@ impl DockerBackend {
             default_memory: String::new(),
             service_startup_timeout: Duration::from_secs(30),
             stop_timeout_secs: 10,
+            save_all_logs_dir: None,
         })
+    }
+
+    /// T50: capture container stdout/stderr into
+    /// `<dir>/<container_id>.log`. Pass `None` to disable.
+    pub fn with_save_all_logs(mut self, dir: Option<String>) -> Self {
+        self.save_all_logs_dir = dir.filter(|d| !d.is_empty());
+        self
     }
 
     pub fn with_network(mut self, n: impl Into<String>) -> Self {
@@ -310,6 +322,44 @@ impl Backend for DockerBackend {
             fileserver: host_port_for(FILESERVER_PORT),
             clipboard: host_port_for(CLIPBOARD_PORT),
         };
+
+        // T50: stream container logs to file when --save-all-logs.
+        if let Some(dir) = &self.save_all_logs_dir {
+            let _ = tokio::fs::create_dir_all(dir).await;
+            let path = format!("{dir}/{id}.log");
+            let client = self.client.clone();
+            let id = id.clone();
+            tokio::spawn(async move {
+                let mut stream = client.logs(
+                    &id,
+                    Some(LogsOptions::<String> {
+                        follow: true,
+                        stdout: true,
+                        stderr: true,
+                        ..Default::default()
+                    }),
+                );
+                let mut file = match tokio::fs::File::create(&path).await {
+                    Ok(f) => f,
+                    Err(e) => {
+                        tracing::warn!(error = %e, %path, "open log file");
+                        return;
+                    }
+                };
+                while let Some(item) = stream.next().await {
+                    let bytes = match item {
+                        Ok(LogOutput::StdOut { message } | LogOutput::StdErr { message }) => {
+                            message
+                        }
+                        Ok(_) => continue,
+                        Err(_) => break,
+                    };
+                    if file.write_all(&bytes).await.is_err() {
+                        break;
+                    }
+                }
+            });
+        }
 
         // T21: wait for the WebDriver port to accept TCP within
         // service_startup_timeout. 100 ms backoff.

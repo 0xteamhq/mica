@@ -39,6 +39,7 @@ bytes = "1"
 humantime = "2"
 aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1"
+arc-swap = "1"
 
 [dev-dependencies]
 wiremock = "0.6"

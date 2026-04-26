@@ -26,7 +26,8 @@ pub struct SessionEntry {
 
 pub async fn status(State(state): State<AppState>) -> Json<StatusResponse> {
     let mut browsers: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for (name, versions) in state.config.snapshot() {
+    let cfg = state.config();
+    for (name, versions) in cfg.snapshot() {
         let mut keys: Vec<String> = versions.versions.keys().cloned().collect();
         keys.sort();
         browsers.insert(name.clone(), keys);

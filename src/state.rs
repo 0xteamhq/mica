@@ -10,12 +10,15 @@ use crate::config::Config;
 use crate::events::EventBus;
 use crate::queue::Queue;
 use crate::session::SessionMap;
+use arc_swap::ArcSwap;
 use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub config: Arc<Config>,
+    /// Hot-swappable config (T51). Read via `config()`; mutate via
+    /// `config_swap.store(Arc::new(new_cfg))` from the SIGHUP handler.
+    pub config_swap: Arc<ArcSwap<Config>>,
     pub queue: Queue,
     pub sessions: SessionMap,
     pub backend: Arc<dyn Backend>,
@@ -33,7 +36,7 @@ impl AppState {
             .build()
             .expect("build reqwest client");
         Self {
-            config: Arc::new(config),
+            config_swap: Arc::new(ArcSwap::from_pointee(config)),
             queue,
             sessions: SessionMap::new(),
             backend,
@@ -41,5 +44,10 @@ impl AppState {
             http,
             events: EventBus::new(),
         }
+    }
+
+    /// Cheap, lock-free snapshot of the current config.
+    pub fn config(&self) -> arc_swap::Guard<Arc<Config>> {
+        self.config_swap.load()
     }
 }

@@ -100,7 +100,7 @@ pub async fn create_session(
     let browser_name = caps.browser_name.clone().unwrap_or_default();
     let browser_version = caps.browser_version.clone();
     let (browser, version) = state
-        .config
+        .config()
         .find(&browser_name, browser_version.as_deref())
         .ok_or_else(|| {
             WdError::session_not_created(format!(
