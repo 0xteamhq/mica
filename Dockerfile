@@ -15,6 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+# include_str!()'d at compile time by src/handlers/openapi.rs.
+COPY deploy/openapi ./deploy/openapi
 
 RUN cargo build --release --locked
 RUN strip target/release/mica
