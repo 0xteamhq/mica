@@ -82,21 +82,35 @@ const browser = await chromium.connect({
 
 ## Endpoints
 
+WebDriver wire (what your test client talks to):
+
 | Path | Purpose |
 |---|---|
 | `POST /wd/hub/session` | Create a WebDriver session |
-| `GET/POST/PUT/DELETE /wd/hub/session/{id}/...` | Proxy session traffic |
+| `*    /wd/hub/session/{id}/...` | Proxy session traffic |
+
+Operations & observability:
+
+| Path | Purpose |
+|---|---|
+| `GET /healthz`, `/readyz` | Kubernetes liveness / readiness probes |
+| `GET /metrics` | Prometheus metrics (text format) |
+| `GET /status`, `/wd/hub/status` | Capacity, browsers map, live sessions |
+
+<details>
+<summary>Per-session auxiliary endpoints (VNC, CDP, video, logs, clipboard, downloads)</summary>
+
+| Path | Purpose |
+|---|---|
 | `GET /vnc/{id}` (WebSocket) | Live VNC feed of the session |
 | `GET/DELETE /video/{name}` | Serve / delete recorded video |
 | `GET/DELETE /logs/{name}` | Serve / delete container logs |
 | `* /devtools/{id}/...` | Reverse proxy to Chrome DevTools (CDP) |
 | `* /clipboard/{id}` | Reverse proxy to the container's clipboard |
 | `* /download/{id}/...` | Reverse proxy to the container's download server |
-| `GET /ping` | Liveness + uptime + queue counters |
-| `GET /status`, `/wd/hub/status` | Capacity + browsers map + live sessions |
-| `GET /healthz` | Kubernetes-style liveness probe |
-| `GET /readyz` | Kubernetes-style readiness probe |
-| `GET /metrics` | Prometheus metrics (text format) |
+| `GET /ping` | Uptime + queue counters (legacy probe) |
+
+</details>
 
 ## Configuration
 
