@@ -196,6 +196,7 @@ async fn create_session_inner(
     let log_dir = state.args.log_output_dir.clone();
     let delete_timeout = state.args.session_delete_timeout;
     let s3_key_pattern_for_cancel = caps.s3_key_pattern.clone();
+    let plugins_for_cancel = state.plugins.clone();
     let cancel = Box::new(move || {
         metrics::counter!(SESSIONS_TEARDOWN_TOTAL).increment(1);
         // Release the queue slot regardless of stopper outcome.
@@ -221,23 +222,44 @@ async fn create_session_inner(
                 .send()
                 .await;
             stopper.stop().await;
-            // T44 — emit FileCreated for whichever artifacts exist.
+            // T44 — for each finalized artifact: ask the plugin
+            // chain first (if any), then either emit to the EventBus
+            // (Keep → S3Uploader runs) or short-circuit per the
+            // plugin verdict.
             for (kind, dir, ext) in [
                 (ArtifactKind::Video, video_dir.as_str(), "mp4"),
                 (ArtifactKind::Log, log_dir.as_str(), "log"),
             ] {
                 let path = PathBuf::from(dir).join(format!("{sid}.{ext}"));
                 if tokio::fs::metadata(&path).await.is_ok() {
-                    events
-                        .emit_file(FileCreated {
-                            path,
-                            session_id: sid.clone(),
-                            kind,
-                            browser: Some(browser.clone()),
-                            browser_version: Some(version.clone()),
-                            s3_key_pattern: s3_key_pattern_for_cancel.clone(),
-                        })
-                        .await;
+                    let event = FileCreated {
+                        path: path.clone(),
+                        session_id: sid.clone(),
+                        kind,
+                        browser: Some(browser.clone()),
+                        browser_version: Some(version.clone()),
+                        s3_key_pattern: s3_key_pattern_for_cancel.clone(),
+                    };
+                    let verdict = match &plugins_for_cancel {
+                        Some(host) => host.artifact_verdict(&event).await,
+                        None => crate::plugins::ArtifactVerdict::Keep,
+                    };
+                    match verdict {
+                        crate::plugins::ArtifactVerdict::Keep => {
+                            events.emit_file(event).await;
+                        }
+                        crate::plugins::ArtifactVerdict::Skip => {
+                            if let Err(e) = tokio::fs::remove_file(&path).await {
+                                tracing::warn!(error = %e, path = %path.display(), "plugin requested skip; remove failed");
+                            }
+                        }
+                        crate::plugins::ArtifactVerdict::S3 { .. }
+                        | crate::plugins::ArtifactVerdict::CustomUri(_) => {
+                            // Plugin handled (or directed) the
+                            // upload itself. Skip the default
+                            // S3Uploader for this artifact.
+                        }
+                    }
                 }
             }
             // T43 — SessionStopped goes out last so listeners that

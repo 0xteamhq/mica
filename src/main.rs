@@ -118,9 +118,12 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!(bucket = %args.s3_bucket, "S3 uploader enabled");
     }
 
-    // Phase 5: load WASM plugins, run lifecycle.init, register as a
-    // FileCreatedListener so `artifact.on_file_created` fires from
-    // the EventBus on every session teardown.
+    // Phase 5: load WASM plugins, run lifecycle.init, attach to
+    // AppState. The cancel hook in handlers/create.rs runs the
+    // plugin chain over each FileCreated BEFORE emitting it onto
+    // the EventBus, so a plugin returning Skip / S3 / CustomUri
+    // short-circuits the built-in S3Uploader.
+    let mut state = state;
     if !args.plugin_dir.is_empty() {
         match mica::plugins::PluginHost::new() {
             Ok(host) => {
@@ -131,8 +134,7 @@ async fn main() -> anyhow::Result<()> {
                     let names = host.loaded_names().await;
                     tracing::info!(plugins = ?names, "WASM plugins loaded");
                     host.init_all().await;
-                    let host_arc: Arc<dyn mica::events::FileCreatedListener> = Arc::new(host);
-                    state.events.add_file_listener(host_arc).await;
+                    state = state.with_plugins(Arc::new(host));
                 }
             }
             Err(e) => tracing::warn!(error = %e, "wasmtime engine init failed; plugins disabled"),

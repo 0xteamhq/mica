@@ -7,19 +7,18 @@
 //! - Loads every `.wasm` in `--plugin-dir`.
 //! - Implements the always-granted host imports (`mica:plugin/host-log`
 //!   and `mica:plugin/clock`).
-//! - Calls `lifecycle.init` on each plugin once at startup; logs
-//!   per-plugin errors but never blocks mica startup.
-//! - Implements `FileCreatedListener` so an `Arc<PluginHost>` plugs
-//!   straight into the EventBus. On every `FileCreated`, mica calls
-//!   `artifact.on-file-created` on each plugin and logs the returned
-//!   `upload-destination`.
+//! - Calls `lifecycle.init` on each plugin once at startup.
+//! - `artifact_verdict()` runs the plugin chain over a `FileCreated`
+//!   and returns an `ArtifactVerdict`. Plugins are called in load
+//!   order; first non-`Keep` wins; subsequent plugins are skipped
+//!   for that artifact (matches `wit/artifact.wit`). Caller acts on
+//!   the verdict — `Keep` falls through to the built-in
+//!   `S3Uploader`; `Skip` deletes the local file; `S3{...}` and
+//!   `CustomUri` log + suppress the default uploader.
 //!
 //! Out of scope (next plugin commit):
 //! - Capability-gated imports (`http-client`, `s3-write`, `state`)
 //!   plus the `--plugin-grants <name>=<caps>` CLI surface.
-//! - Acting on `upload-destination::skip` / `s3` / `custom-uri`
-//!   (today everything is logged but the canonical S3Uploader still
-//!   runs unconditionally — `keep` semantics).
 //! - `session.on-create` (caps rewrite + reject) and the http
 //!   middleware hooks. Each needs handler-side wiring.
 //! - Per-plugin config from `--plugin-config <toml>`. Today
@@ -36,19 +35,13 @@ use wasmtime::Engine;
 use wasmtime::component::{Component, Linker};
 use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiView};
 
-use crate::events::{ArtifactKind, FileCreated, FileCreatedListener};
+use crate::events::{ArtifactKind, FileCreated};
 
 mod bindings {
     wasmtime::component::bindgen!({
         world: "plugin",
         path: "wit",
         async: true,
-        with: {
-            // Trim the import set to what we actually link host-side.
-            // Plugins importing http-client / s3-write / state will
-            // fail to instantiate until --plugin-grants ships, which
-            // is the documented fail-closed behavior.
-        },
     });
 }
 
@@ -59,6 +52,31 @@ use bindings::mica::plugin::host_log::Level as HostLogLevel;
 use bindings::mica::plugin::types::{
     ArtifactKind as WitArtifactKind, FileInfo as WitFileInfo, Instant as WitInstant,
 };
+
+/// Resolution of the artifact-handler chain. Cancel-hook callers
+/// switch on this to decide what to do with the on-disk artifact.
+#[derive(Debug, Clone)]
+pub enum ArtifactVerdict {
+    /// All plugins returned `Keep` (or the host has no plugins).
+    /// Caller falls through to the built-in `S3Uploader`.
+    Keep,
+    /// A plugin asked mica to drop the artifact. Caller should
+    /// delete the local file and NOT run the default uploader.
+    Skip,
+    /// A plugin specified an explicit S3 destination. mica logs
+    /// the directive but does not perform the upload itself —
+    /// plugins requiring this path implement the transfer via
+    /// the `s3-write` capability (granted via `--plugin-grants`).
+    /// Default uploader is suppressed.
+    S3 {
+        bucket: String,
+        key: String,
+        region: Option<String>,
+    },
+    /// Plugin handled the artifact via an out-of-band URI.
+    /// Default uploader is suppressed.
+    CustomUri(String),
+}
 
 pub struct HostState {
     table: ResourceTable,
@@ -110,7 +128,6 @@ impl bindings::mica::plugin::clock::Host for HostState {
     }
 }
 
-/// One loaded plugin.
 #[allow(dead_code)]
 pub struct Plugin {
     pub name: String,
@@ -203,9 +220,7 @@ impl PluginHost {
         )
     }
 
-    /// Call `lifecycle.init` once on every loaded plugin. Errors
-    /// (instantiate failure, WIT-level error, wasm trap) log at WARN
-    /// but never block startup.
+    /// Call `lifecycle.init` once on every loaded plugin.
     pub async fn init_all(&self) {
         let plugins = self.plugins.lock().await;
         let linker = match self.build_linker() {
@@ -253,17 +268,21 @@ impl PluginHost {
         }
     }
 
-    /// Fan a `FileCreated` out to every plugin's
-    /// `artifact.on-file-created`. Currently logs the returned
-    /// `upload-destination`; acting on it (skip / s3 / custom-uri)
-    /// is the next plugin commit.
-    pub async fn dispatch_file_created(&self, e: &FileCreated) {
+    /// Run the plugin chain over a `FileCreated` and resolve to an
+    /// `ArtifactVerdict`. Plugins are called in load order; first
+    /// non-`Keep` wins. Errors / wasm traps in a plugin are treated
+    /// as `Keep` for that plugin (try the next one) so a misbehaving
+    /// plugin can't strand the chain.
+    pub async fn artifact_verdict(&self, e: &FileCreated) -> ArtifactVerdict {
         let plugins = self.plugins.lock().await;
+        if plugins.is_empty() {
+            return ArtifactVerdict::Keep;
+        }
         let linker = match self.build_linker() {
             Ok(l) => l,
             Err(err) => {
                 tracing::warn!(error = %err, "plugin linker setup failed");
-                return;
+                return ArtifactVerdict::Keep;
             }
         };
         let info = WitFileInfo {
@@ -293,41 +312,39 @@ impl PluginHost {
                     continue;
                 }
             };
-            match inst
+            let result = inst
                 .mica_plugin_artifact()
                 .call_on_file_created(&mut store, &info)
-                .await
-            {
-                Ok(Ok(dest)) => match dest {
-                    UploadDestination::Keep => {
-                        tracing::debug!(plugin = %plugin.name, path = %info.path, "plugin returned keep");
-                    }
-                    UploadDestination::Skip => {
-                        tracing::info!(plugin = %plugin.name, path = %info.path, "plugin requested skip");
-                    }
-                    UploadDestination::S3(t) => {
-                        tracing::info!(plugin = %plugin.name, bucket = %t.bucket, key = %t.key, "plugin requested s3 destination");
-                    }
-                    UploadDestination::CustomUri(uri) => {
-                        tracing::info!(plugin = %plugin.name, %uri, "plugin handled artifact via custom-uri");
-                    }
-                },
-                Ok(Err(err)) => {
-                    tracing::warn!(plugin = %plugin.name, code = %err.code, message = %err.message, "plugin artifact.on_file_created returned error");
+                .await;
+            match result {
+                Ok(Ok(UploadDestination::Keep)) => {
+                    tracing::debug!(plugin = %plugin.name, path = %info.path, "plugin returned keep");
                 }
-                Err(e) => {
-                    tracing::warn!(plugin = %plugin.name, error = %e, "plugin artifact.on_file_created wasm trap");
+                Ok(Ok(UploadDestination::Skip)) => {
+                    tracing::info!(plugin = %plugin.name, path = %info.path, "plugin requested skip");
+                    return ArtifactVerdict::Skip;
+                }
+                Ok(Ok(UploadDestination::S3(t))) => {
+                    tracing::info!(plugin = %plugin.name, bucket = %t.bucket, key = %t.key, "plugin requested s3 destination");
+                    return ArtifactVerdict::S3 {
+                        bucket: t.bucket,
+                        key: t.key,
+                        region: t.region,
+                    };
+                }
+                Ok(Ok(UploadDestination::CustomUri(uri))) => {
+                    tracing::info!(plugin = %plugin.name, %uri, "plugin handled artifact via custom-uri");
+                    return ArtifactVerdict::CustomUri(uri);
+                }
+                Ok(Err(err)) => {
+                    tracing::warn!(plugin = %plugin.name, code = %err.code, message = %err.message, "plugin artifact.on_file_created returned error; treating as keep");
+                }
+                Err(err) => {
+                    tracing::warn!(plugin = %plugin.name, error = %err, "plugin artifact.on_file_created wasm trap; treating as keep");
                 }
             }
         }
-    }
-}
-
-/// Adapter — register `Arc<PluginHost>` directly on the EventBus.
-#[async_trait]
-impl FileCreatedListener for PluginHost {
-    async fn on_file_created(&self, e: &FileCreated) {
-        self.dispatch_file_created(e).await;
+        ArtifactVerdict::Keep
     }
 }
 
@@ -350,7 +367,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dispatch_file_created_on_empty_host_is_noop() {
+    async fn empty_host_returns_keep() {
         let host = PluginHost::new().expect("engine");
         let event = FileCreated {
             path: std::path::PathBuf::from("/tmp/nonexistent.mp4"),
@@ -360,6 +377,7 @@ mod tests {
             browser_version: None,
             s3_key_pattern: None,
         };
-        host.dispatch_file_created(&event).await;
+        let verdict = host.artifact_verdict(&event).await;
+        assert!(matches!(verdict, ArtifactVerdict::Keep));
     }
 }

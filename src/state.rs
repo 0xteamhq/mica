@@ -8,6 +8,7 @@ use crate::backend::Backend;
 use crate::cli::Args;
 use crate::config::Config;
 use crate::events::EventBus;
+use crate::plugins::PluginHost;
 use crate::queue::Queue;
 use crate::session::SessionMap;
 use arc_swap::ArcSwap;
@@ -30,6 +31,11 @@ pub struct AppState {
     /// tests can build an `AppState` without installing a global
     /// recorder (only one process-wide recorder is ever installed).
     pub metrics: Option<PrometheusHandle>,
+    /// WASM plugin host. Cancel hook calls
+    /// `plugins.artifact_verdict(&FileCreated)` BEFORE emitting the
+    /// event onto `events`, so a plugin returning `Skip` / `S3` /
+    /// `CustomUri` short-circuits the built-in `S3Uploader`.
+    pub plugins: Option<Arc<PluginHost>>,
 }
 
 impl AppState {
@@ -49,6 +55,7 @@ impl AppState {
             http,
             events: EventBus::new(),
             metrics: None,
+            plugins: None,
         }
     }
 
@@ -56,6 +63,12 @@ impl AppState {
     /// `observability::install()`; tests leave it unset.
     pub fn with_metrics(mut self, handle: PrometheusHandle) -> Self {
         self.metrics = Some(handle);
+        self
+    }
+
+    /// Attach a plugin host. Tests leave it unset.
+    pub fn with_plugins(mut self, host: Arc<PluginHost>) -> Self {
+        self.plugins = Some(host);
         self
     }
 
