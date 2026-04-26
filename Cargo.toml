@@ -5,14 +5,15 @@ edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
 description = """
-Mica is a Selenoid-compatible browser grid written in Rust. It runs as a single \
-Docker container locally and in production, exposes the W3C WebDriver protocol on \
-/wd/hub, and launches one browser sandbox per session through a pluggable backend \
-(Docker, Kubernetes, Firecracker / Cloud Hypervisor / Kata / gVisor). The same \
-binary scales 0 → N globally with no vendor lock-in: cold-start floor ranges from \
-~200 ms (microVM + snapshot on Fly / bare-metal) to ~400 ms (gVisor on stock \
-managed K8s). Drop-in replacement for aerokube/selenoid; foundation for higher \
-phases that add warm pools, microVM isolation, WASM plugins, and BiDi streaming.
+Mica is a browser grid for the T-system. It runs as a single Rust binary and a \
+single Docker container — the same artifact you run locally is what runs in \
+production, anywhere in the world. Each test session gets its own isolated \
+browser sandbox (Docker container, Kubernetes pod, or microVM) via a pluggable \
+backend, and the orchestrator scales 0 → N with no vendor lock-in. Cold-start \
+floors range from ~200 ms (microVM + snapshot on bare-metal / KVM hosts) to \
+~400 ms (user-space sandbox on stock managed Kubernetes). Mica speaks the W3C \
+WebDriver protocol so existing Selenium / Playwright / WebDriver clients work \
+unchanged.
 """
 repository = "https://github.com/0xteam/mica"
 readme = "README.md"
