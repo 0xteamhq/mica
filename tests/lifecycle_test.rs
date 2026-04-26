@@ -38,6 +38,9 @@ fn args_with(timeout_ms: u64, retry_count: u32) -> Args {
         s3_bucket: String::new(),
         s3_region: String::new(),
         s3_prefix: String::new(),
+        warm_pool_min: 0,
+        warm_pool_max: 16,
+        warm_pool_idle_ttl: Duration::from_secs(300),
     }
 }
 

@@ -4,6 +4,7 @@ use mica::backend::docker::DockerBackend;
 use mica::cli::Args;
 use mica::config::Config;
 use mica::handlers;
+use mica::pool::PooledBackend;
 use mica::shutdown;
 use mica::state::AppState;
 use mica::upload::{UploadListener, s3::S3Uploader};
@@ -38,7 +39,19 @@ async fn main() -> anyhow::Result<()> {
         } else {
             None
         });
-    let backend: Arc<dyn Backend> = Arc::new(backend);
+    let docker_backend: Arc<dyn Backend> = Arc::new(backend);
+
+    // P2.3: when --warm-pool-min > 0, wrap DockerBackend with PooledBackend.
+    let backend: Arc<dyn Backend> = if args.warm_pool_min > 0 {
+        Arc::new(PooledBackend::new(
+            docker_backend,
+            args.warm_pool_min as usize,
+            args.warm_pool_max as usize,
+            args.warm_pool_idle_ttl,
+        ))
+    } else {
+        docker_backend
+    };
 
     let state = AppState::new(config, args.clone(), backend);
 

@@ -83,4 +83,16 @@ pub struct Args {
     /// S3 key prefix prepended to every uploaded object.
     #[arg(long, default_value = "", env = "MICA_S3_PREFIX")]
     pub s3_prefix: String,
+
+    /// Min idle warm-pool size per browser key. 0 disables the pool.
+    #[arg(long, default_value_t = 0)]
+    pub warm_pool_min: u32,
+
+    /// Max idle warm-pool size per browser key.
+    #[arg(long, default_value_t = 16)]
+    pub warm_pool_max: u32,
+
+    /// Idle TTL: pool entries older than this are evicted.
+    #[arg(long, default_value = "5m", value_parser = parse_duration)]
+    pub warm_pool_idle_ttl: Duration,
 }

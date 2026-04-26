@@ -199,7 +199,12 @@ impl Backend for DockerBackend {
         } else {
             Some(browser.sysctl.clone())
         };
-        let shm = browser.shm_size.map(|n| n as i64);
+        // P2.4: Chromium's default /dev/shm of 64 MB is far too small
+        // (browserless documents 2 GB as the safe floor). If the
+        // operator hasn't set shmSize in browsers.json, default to 2
+        // GiB so Chrome doesn't crash under load.
+        const DEFAULT_SHM: i64 = 2 * 1024 * 1024 * 1024;
+        let shm = Some(browser.shm_size.map(|n| n as i64).unwrap_or(DEFAULT_SHM));
 
         // T23: per-browser cpu/memory > global default.
         let memory = self.merge_memory(&browser.mem);
