@@ -27,7 +27,7 @@ impl Config {
     }
 
     /// Resolve `(browser_name, requested_version)` to a concrete
-    /// `(Browser, version_string)`. Matches Selenoid's behavior:
+    /// `(Browser, version_string)`:
     ///
     /// - `None` or empty `requested_version` → the browser's `default`.
     /// - exact key match → that version.

@@ -1,15 +1,14 @@
-//! Bounded session queue mirroring `selenoid/protect/queue.go:15-82`.
+//! Bounded session queue.
 //!
-//! Selenoid uses four channels (`limit`, `queued`, `pending`, `used`) to
-//! gate parallel sessions; we use a single tokio semaphore for the hard
-//! capacity bound and three atomics for the observable counters
-//! (`queued`, `pending`, `used`) that `/status` and `/ping` v2 will surface.
+//! A single tokio semaphore enforces the hard capacity bound, and
+//! three atomics expose the observable counters (`queued`, `pending`,
+//! `used`) surfaced by `/status` and `/ping` v2.
 //!
 //! ## Lifecycle
 //!
 //! - `try_acquire()` — non-blocking, returns `None` when full. Increments
 //!   `pending`. Wired up to the create-session handler when the
-//!   `X-Selenoid-No-Wait: 1` header is set or `--disable-queue` is passed
+//!   `X-Mica-No-Wait: 1` header is set or `--disable-queue` is passed
 //!   (see `handlers::create`). This is the contract behind T14.
 //! - `acquire().await` — the default path. Waits for a slot. Increments
 //!   `queued` while waiting, then decrements `queued` and increments

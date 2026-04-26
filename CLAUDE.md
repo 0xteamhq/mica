@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-mica is a W3C-WebDriver-compatible browser grid in Rust. Single binary, single Docker container, scales 0→N globally. The wire format is a Selenoid drop-in — most architectural choices and source comments reference `selenoid/<path>.go` for parity. Roadmap and phase status live in `docs/plans/2026-04-26-mica-strategy.md` and the Linear project [Mica — Rust Browser Grid](https://linear.app/0xhq/project/mica-rust-browser-grid-3a5252071073).
+mica is a W3C-WebDriver-compatible browser grid in Rust. Single binary, single Docker container, scales 0→N globally. Roadmap and phase status live in `docs/plans/2026-04-26-mica-strategy.md` and the Linear project [Mica — Rust Browser Grid](https://linear.app/0xhq/project/mica-rust-browser-grid-3a5252071073).
 
 Rust edition 2024, MSRV 1.88. Single crate (`mica`) with one library + two binaries (`mica`, `mica-rootfs`).
 
@@ -83,7 +83,7 @@ Capability gating is fail-closed: a plugin importing a non-granted host capabili
 
 | Phase | What | Status |
 |---|---|---|
-| 1 | Selenoid drop-in (Rust): Docker backend, W3C wire, idle/cancel/retry, /vnc, /video, /logs, S3 uploader, SIGHUP reload | done |
+| 1 | Docker backend, W3C wire, idle/cancel/retry, /vnc, /video, /logs, S3 uploader, SIGHUP reload | done |
 | 2 | `chrome-headless-shell` image + warm pool + 2 GiB `/dev/shm` | done |
 | 3 | K8sBackend (kube-rs) + Helm chart at `deploy/k8s/charts/mica/` | done |
 | 4 | Isolation drivers — runc/gvisor/kata wired, firecracker/cloud_hypervisor scaffolded | partial |
@@ -96,6 +96,6 @@ Comments like "Phase X" and ticket IDs (`P4.6`, `0XT-NN`, `T<n>`) reference Line
 ## Conventions
 
 - The Backend trait surface is deliberately small (`start()` returning `StartedSession`). Resist adding methods; bake the new capability into `StartParams` or `StartedSession` instead.
-- Selenoid parity is the contract for HTTP and `browsers.json`. If you change wire shape, document the deviation in the source comment with the `selenoid/<file>.go:<lines>` reference.
+- The HTTP wire format and `browsers.json` schema are the public contract. Document any wire change in the source comment with the impacted client-side keys / headers.
 - `WdError` (`src/error.rs`) is the canonical W3C error type. Backend / queue / config errors all map into it via `From` impls; handlers return `Result<..., WdError>` and `IntoResponse` does the JSON encoding.
 - Tests in `tests/` use `MockBackend` for anything that doesn't specifically need Docker. `tests/fixtures/browsers.json` is the canonical config fixture.

@@ -3,11 +3,10 @@ use std::collections::HashMap;
 
 /// One browser image entry from `browsers.json`.
 ///
-/// Mirrors Selenoid's `config.Browser` (selenoid/config/config.go:52-66) so
-/// existing `browsers.json` files load unchanged. The `image` field is kept
-/// as a `serde_json::Value` because Selenoid uses it both as a string
-/// (Docker mode) and as an array (driver mode); driver mode is dropped in
-/// Phase 1 (see Task T7).
+/// The `image` field is kept as a `serde_json::Value` to remain
+/// schema-compatible with the legacy upstream Go grid which used it
+/// both as a string (Docker mode) and as an array (driver mode);
+/// driver mode is dropped in Phase 1 (see Task T7).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Browser {
@@ -34,9 +33,9 @@ pub struct Browser {
     pub labels: HashMap<String, String>,
     #[serde(default)]
     pub sysctl: HashMap<String, String>,
-    /// Selenoid parity: when `true`, the container is started with
-    /// `--publish-all`, replacing the explicit `5900/7070/8080/9090`
-    /// port bindings mica sets by default.
+    /// When `true`, the container is started with `--publish-all`,
+    /// replacing the explicit `5900/7070/8080/9090` port bindings
+    /// mica sets by default.
     #[serde(default)]
     pub publish_all_ports: bool,
 }

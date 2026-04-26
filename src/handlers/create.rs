@@ -2,7 +2,7 @@
 //!
 //! Flow (T29):
 //!   1. Parse caps (W3C alwaysMatch / legacy desiredCapabilities).
-//!   2. Honor X-Selenoid-No-Wait + --disable-queue → try_acquire,
+//!   2. Honor X-Mica-No-Wait + --disable-queue → try_acquire,
 //!      else acquire (T14).
 //!   3. Look up the requested browser+version in config.
 //!   4. backend.start(StartParams) within service_startup_timeout.
@@ -37,7 +37,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
-const NO_WAIT_HEADER: &str = "x-selenoid-no-wait";
+const NO_WAIT_HEADER: &str = "x-mica-no-wait";
 
 /// Drop-guard around a Stopper. While active, dropping the guard
 /// spawns the stop in the background; calling `disarm()` first
@@ -109,10 +109,10 @@ pub async fn create_session(
             ))
         })?;
 
-    // Selenoid parity: cap the per-session idle timeout that the
-    // client can request via `selenoid:options.sessionTimeout`. If
-    // unset, fall back to --timeout. If the requested value exceeds
-    // --max-timeout, clamp it.
+    // Cap the per-session idle timeout that the client can request
+    // via `mica:options.sessionTimeout`. If unset, fall back to
+    // --timeout. If the requested value exceeds --max-timeout,
+    // clamp it.
     let effective_timeout = match caps.session_timeout.as_deref() {
         Some(s) if !s.is_empty() => match humantime::parse_duration(s) {
             Ok(d) if d <= state.args.max_timeout => d,
@@ -234,9 +234,8 @@ pub async fn create_session(
     });
 
     // Build the idle hook that triggers SessionMap::remove (which in
-    // turn fires the cancel hook above). Selenoid parity: log the
-    // [SESSION_TIMED_OUT] line from selenoid/selenoid.go:75 when
-    // the reaper fires.
+    // turn fires the cancel hook above). Emits a structured
+    // [SESSION_TIMED_OUT] log line when the reaper fires.
     let sessions = state.sessions.clone();
     let session_id_for_idle = session_id.clone();
     let request_id_for_idle = request_id.clone();
@@ -266,7 +265,7 @@ pub async fn create_session(
     );
     state.sessions.put(session).await;
 
-    // (8) [SESSION_CREATED] log line — Selenoid-compatible structured form.
+    // (8) [SESSION_CREATED] log line.
     let elapsed_ms = started_at.elapsed().as_millis();
     tracing::info!(
         request_id = %request_id,

@@ -51,11 +51,11 @@ pub struct DockerBackend {
     /// T50 — when set, every container's stdout/stderr stream is
     /// captured to `<save_all_logs_dir>/<container_id>.log`.
     save_all_logs_dir: Option<String>,
-    /// Selenoid parity: privileged-by-default. When `true`, mica
-    /// drops the privileged flag on every container it creates.
+    /// When `true`, mica drops the privileged flag on every
+    /// container it creates.
     disable_privileged: bool,
-    /// Selenoid parity: optional `HostConfig.LogConfig` JSON parsed
-    /// from the `--log-conf` CLI flag.
+    /// Optional `HostConfig.LogConfig` JSON parsed from the
+    /// `--log-conf` CLI flag.
     log_config: Option<HostConfigLogConfig>,
 }
 
@@ -78,13 +78,13 @@ impl DockerBackend {
         })
     }
 
-    /// Selenoid parity: turn off privileged mode for every container.
+    /// Turn off privileged mode for every container.
     pub fn with_disable_privileged(mut self, off: bool) -> Self {
         self.disable_privileged = off;
         self
     }
 
-    /// Selenoid parity: parse `--log-conf` JSON into a `HostConfigLogConfig`.
+    /// Parse `--log-conf` JSON into a `HostConfigLogConfig`.
     /// Format: `{"type":"json-file","config":{"max-size":"10m"}}`.
     pub fn with_log_conf(mut self, raw: &str) -> Self {
         if raw.is_empty() {
@@ -144,7 +144,7 @@ impl DockerBackend {
                 Some(self.default_cpu.clone())
             }
         })?;
-        // Selenoid accepts CPU as a fractional core count ("0.5") or an
+        // CPU is accepted as a fractional core count ("0.5") or an
         // integer ("2"). Bollard wants nanocpus (1e9 = 1 vCPU).
         raw.parse::<f64>().ok().map(|n| (n * 1e9) as i64)
     }
@@ -256,9 +256,9 @@ impl Backend for DockerBackend {
             None
         };
 
-        // Selenoid parity: when `publishAllPorts` is set, drop our
-        // explicit port_bindings and let docker map every exposed
-        // port to a host-side ephemeral port.
+        // When `publishAllPorts` is set, drop our explicit
+        // port_bindings and let docker map every exposed port to a
+        // host-side ephemeral port.
         let (final_port_bindings, publish_all_ports) = if browser.publish_all_ports {
             (None, Some(true))
         } else {
@@ -588,7 +588,7 @@ async fn wait_for_tcp(host: &str, port: &str, timeout: Duration) -> Result<(), (
     }
 }
 
-/// Parse Selenoid-style memory strings: "256m", "1g", "512M", "1024" (bytes).
+/// Parse short-form memory strings: "256m", "1g", "512M", "1024" (bytes).
 fn parse_memory(s: &str) -> Option<i64> {
     let s = s.trim();
     if s.is_empty() {

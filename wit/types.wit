@@ -27,7 +27,7 @@ interface types {
     value: string,
   }
 
-  /// WebDriver / Selenoid capabilities mica parses out of a new-session
+  /// WebDriver capabilities mica parses out of a new-session
   /// request body. Mirrors `mica::caps::Caps`. Optional fields use
   /// `option<...>`; absent and present-but-empty are distinct.
   record capabilities {

@@ -12,9 +12,8 @@ pub struct WdValue {
 }
 
 /// W3C-shaped WebDriver error: `{"value": {"error", "message", "stacktrace"}}`.
-///
-/// Mirrors `selenoid/jsonerror/jsonerror.go` so existing WebDriver
-/// clients see the same JSON they expect from Selenoid.
+/// The on-the-wire shape matches the W3C error spec exactly so any
+/// conformant WebDriver client deserializes it without changes.
 #[derive(Debug, Serialize)]
 pub struct WdError {
     pub value: WdValue,

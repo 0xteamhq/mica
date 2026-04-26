@@ -22,12 +22,12 @@ fn parses_legacy_desired_capabilities() {
 }
 
 #[test]
-fn extracts_selenoid_extensions() {
+fn extracts_mica_extensions() {
     let body = serde_json::json!({
         "capabilities": {
             "alwaysMatch": {
                 "browserName": "chrome",
-                "selenoid:options": {
+                "mica:options": {
                     "enableVNC": true,
                     "enableVideo": true,
                     "screenResolution": "1280x1024x24",
