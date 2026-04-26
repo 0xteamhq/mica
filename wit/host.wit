@@ -1,0 +1,62 @@
+package mica:plugin@0.1.0;
+
+/// Host-side interfaces the plugin can import.
+///
+/// CAPABILITY GATING: each interface in this file is a capability.
+/// Plugins declare which they need by listing them in their component
+/// imports (this is automatic via `wit-bindgen`). At plugin load mica
+/// reads the operator's grant set (`--plugin-grants <name>=<caps>`)
+/// and refuses to instantiate the component if a required import is
+/// not granted.
+///
+/// Default grants for an unflagged plugin: `host-log`, `clock`.
+/// Everything else is opt-in.
+
+/// Always granted. Structured logging at standard levels. Plugins
+/// SHOULD use this rather than `wasi:logging` so log records carry
+/// the plugin name automatically.
+interface host-log {
+  enum level {
+    trace,
+    debug,
+    info,
+    warn,
+    error,
+  }
+  log: func(level: level, message: string);
+}
+
+/// Always granted. Wall-clock time from the host (independent of
+/// `wasi:clocks`).
+interface clock {
+  use types.{instant};
+  now: func() -> instant;
+}
+
+/// Capability: `http-client`. Outbound HTTP from the plugin. Mica
+/// applies its own per-plugin rate limit (`--plugin-http-rate <name>=<rps>`)
+/// and timeout. Mica resolves DNS in-host; the plugin sandbox cannot
+/// open raw sockets.
+interface http-client {
+  use types.{http-request, http-response, plugin-error};
+  send: func(req: http-request) -> result<http-response, plugin-error>;
+}
+
+/// Capability: `s3-write`. Upload bytes to S3 using the host's AWS
+/// credentials (or the plugin's per-plugin credentials secret if
+/// configured). The plugin gets only `PutObject`; no read, no delete.
+interface s3-write {
+  use types.{plugin-error};
+  put: func(bucket: string, key: string, body: list<u8>, content-type: option<string>)
+    -> result<_, plugin-error>;
+}
+
+/// Capability: `state`. Per-plugin scratch KV store, namespaced by
+/// plugin name. Persisted in mica's state dir; survives restarts.
+/// Bound to a few MB — designed for tokens / cursors, not bulk data.
+interface state {
+  use types.{plugin-error};
+  get: func(key: string) -> result<option<list<u8>>, plugin-error>;
+  put: func(key: string, value: list<u8>) -> result<_, plugin-error>;
+  delete: func(key: string) -> result<_, plugin-error>;
+}
