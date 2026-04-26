@@ -26,6 +26,10 @@ use crate::backend::{StartParams, StartedSession, Stopper};
 use crate::caps::Caps;
 use crate::error::WdError;
 use crate::events::{ArtifactKind, FileCreated, SessionStopped};
+use crate::observability::names::{
+    SESSION_CREATE_DURATION_MS, SESSIONS_CREATED_TOTAL, SESSIONS_FAILED_TOTAL,
+    SESSIONS_TEARDOWN_TOTAL,
+};
 use crate::queue::Permit;
 use crate::session::Session;
 use crate::state::AppState;
@@ -67,9 +71,25 @@ impl Drop for StopperGuard {
 }
 
 pub async fn create_session(
-    State(state): State<AppState>,
+    state_ext: State<AppState>,
     headers: HeaderMap,
     Json(body): Json<Value>,
+) -> Result<Json<Value>, WdError> {
+    let started_at = Instant::now();
+    let result = create_session_inner(state_ext, headers, body).await;
+    let elapsed_ms = started_at.elapsed().as_secs_f64() * 1000.0;
+    metrics::histogram!(SESSION_CREATE_DURATION_MS).record(elapsed_ms);
+    match &result {
+        Ok(_) => metrics::counter!(SESSIONS_CREATED_TOTAL).increment(1),
+        Err(e) => metrics::counter!(SESSIONS_FAILED_TOTAL, "error" => e.value.error).increment(1),
+    }
+    result
+}
+
+async fn create_session_inner(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Value,
 ) -> Result<Json<Value>, WdError> {
     let request_id = headers
         .get("x-request-id")
@@ -177,6 +197,7 @@ pub async fn create_session(
     let delete_timeout = state.args.session_delete_timeout;
     let s3_key_pattern_for_cancel = caps.s3_key_pattern.clone();
     let cancel = Box::new(move || {
+        metrics::counter!(SESSIONS_TEARDOWN_TOTAL).increment(1);
         // Release the queue slot regardless of stopper outcome.
         if let Ok(mut g) = permit_for_cancel.lock() {
             g.take();
