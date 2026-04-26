@@ -1,0 +1,446 @@
+openapi: 3.0.3
+info:
+  title: mica
+  version: 0.1.0
+  description: |
+    Browser grid for the T-system. W3C WebDriver wire on `/wd/hub/*`,
+    plus mica's auxiliary endpoints (`/status`, `/vnc/{id}`, `/video`,
+    `/logs`, the relay group), production endpoints (`/healthz`,
+    `/readyz`, `/metrics`), and the SDK-discovery endpoint
+    (`/openapi.yaml`).
+
+    The WebDriver wire shape is the W3C spec; this document covers
+    only mica-specific extensions to it. Clients that already speak
+    WebDriver can use `/wd/hub` as a drop-in.
+  license:
+    name: Apache-2.0
+servers:
+  - url: http://localhost:4444
+    description: Default local listener
+  - url: http://mica.example.com
+    description: Example production deployment
+
+paths:
+  /ping:
+    get:
+      summary: Liveness + uptime + queue/sessions counters
+      operationId: ping
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pong" }
+
+  /status:
+    get:
+      summary: Grid health snapshot (mica + Selenoid-shaped)
+      operationId: status
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StatusResponse" }
+
+  /wd/hub/status:
+    get:
+      summary: Selenium 4 GridAdmin alias for /status
+      operationId: gridStatus
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StatusResponse" }
+
+  /healthz:
+    get:
+      summary: K8s livenessProbe — 200 while the process can answer HTTP
+      operationId: healthz
+      responses:
+        "200":
+          description: ok
+          content:
+            text/plain:
+              schema: { type: string, example: "ok" }
+
+  /readyz:
+    get:
+      summary: K8s readinessProbe — 503 only when queue is fully booked
+      operationId: readyz
+      responses:
+        "200":
+          description: ready
+          content:
+            text/plain:
+              schema: { type: string, example: "ok" }
+        "503":
+          description: queue full
+          content:
+            text/plain:
+              schema: { type: string, example: "queue full" }
+
+  /metrics:
+    get:
+      summary: Prometheus exposition (`text/plain; version=0.0.4`)
+      operationId: metrics
+      responses:
+        "200":
+          description: prometheus text format
+          content:
+            text/plain:
+              schema: { type: string }
+
+  /openapi.yaml:
+    get:
+      summary: This document
+      operationId: openapiYaml
+      responses:
+        "200":
+          description: OpenAPI 3.0.3 YAML
+          content:
+            application/yaml:
+              schema: { type: string }
+
+  /wd/hub/session:
+    post:
+      summary: Create a WebDriver session
+      operationId: createSession
+      parameters:
+        - in: header
+          name: X-Mica-No-Wait
+          schema: { type: string, enum: ["1", "true"] }
+          description: |
+            When `1`/`true`, mica returns 500 immediately if the queue
+            is full instead of blocking until a slot frees up. Pairs
+            with the `--disable-queue` server flag.
+        - in: header
+          name: X-Request-ID
+          schema: { type: string }
+          description: |
+            Echoed in the `[SESSION_CREATED]` log line so a client
+            request can be correlated with mica's structured logs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSessionRequest" }
+      responses:
+        "200":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateSessionResponse" }
+        "500":
+          description: session not created (backend / config / queue error)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WdError" }
+        "400":
+          description: invalid argument (caps malformed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WdError" }
+
+  /wd/hub/session/{sessionId}:
+    parameters:
+      - in: path
+        name: sessionId
+        required: true
+        schema: { type: string }
+    delete:
+      summary: Tear down a WebDriver session
+      operationId: deleteSession
+      responses:
+        "200":
+          description: ok
+        "404":
+          description: invalid session id
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WdError" }
+    get:
+      summary: Proxy GET → upstream WebDriver root for the session
+      operationId: getSessionRoot
+      responses:
+        "200": { description: proxied }
+
+  /wd/hub/session/{sessionId}/{tail}:
+    parameters:
+      - in: path
+        name: sessionId
+        required: true
+        schema: { type: string }
+      - in: path
+        name: tail
+        required: true
+        schema: { type: string }
+        description: |
+          Any sub-path under the session (W3C wire — `url`, `element`,
+          `screenshot`, …). Mica forwards method + headers + body
+          unchanged after touching the idle clock.
+    get:    { responses: { "200": { description: proxied } } }
+    post:   { responses: { "200": { description: proxied } } }
+    put:    { responses: { "200": { description: proxied } } }
+    delete: { responses: { "200": { description: proxied } } }
+
+  /wd/hub/session/{sessionId}/file:
+    post:
+      summary: Upload a file to the session container's fileserver
+      operationId: uploadFile
+      description: |
+        Gated by the `--enable-file-upload` server flag. Body is
+        forwarded unchanged to `http://<container>:8080/file`. Also
+        responds at `/se/file` for Selenium 4.
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: uploaded }
+
+  /vnc/{sessionId}:
+    parameters:
+      - in: path
+        name: sessionId
+        required: true
+        schema: { type: string }
+    get:
+      summary: WebSocket bridge to the container's VNC port (5900)
+      operationId: vnc
+      description: Upgrades to WebSocket; bidirectional binary frames.
+      responses:
+        "101": { description: switching protocols }
+        "404":
+          description: invalid session id
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WdError" }
+
+  /session/{sessionId}/bidi:
+    parameters:
+      - in: path
+        name: sessionId
+        required: true
+        schema: { type: string }
+    get:
+      summary: WebDriver BiDi WebSocket multiplex
+      operationId: bidi
+      description: |
+        Selenium 4 / Playwright BiDi protocol bridge. Upgrades to
+        WebSocket and forwards every frame between the client and the
+        upstream browser's BiDi WebSocket.
+      responses:
+        "101": { description: switching protocols }
+
+  /video/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      summary: Serve a finalized video file
+      operationId: getVideo
+      responses:
+        "200":
+          description: video stream
+          content:
+            video/mp4: { schema: { type: string, format: binary } }
+        "400":
+          description: invalid filename
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WdError" }
+    delete:
+      summary: Remove a finalized video file (idempotent)
+      operationId: deleteVideo
+      responses:
+        "204": { description: removed (or already absent) }
+
+  /logs/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      summary: Serve a finalized log file
+      operationId: getLog
+      responses:
+        "200":
+          description: log content
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+    delete:
+      summary: Remove a finalized log file (idempotent)
+      operationId: deleteLog
+      responses:
+        "204": { description: removed (or already absent) }
+
+  /devtools/{sessionId}:
+    parameters:
+      - in: path
+        name: sessionId
+        required: true
+        schema: { type: string }
+    get:    { responses: { "200": { description: relayed to container devtools port } } }
+    post:   { responses: { "200": { description: relayed } } }
+
+  /clipboard/{sessionId}:
+    parameters:
+      - in: path
+        name: sessionId
+        required: true
+        schema: { type: string }
+    get:    { responses: { "200": { description: relayed to container clipboard port } } }
+    post:   { responses: { "200": { description: relayed } } }
+
+  /download/{sessionId}:
+    parameters:
+      - in: path
+        name: sessionId
+        required: true
+        schema: { type: string }
+    get:    { responses: { "200": { description: relayed to container fileserver port } } }
+
+components:
+  schemas:
+    Pong:
+      type: object
+      required: [uptime, lastReloadTime, version, sessions, queue]
+      properties:
+        uptime: { type: string, example: "12s" }
+        lastReloadTime: { type: string, format: date-time }
+        version: { type: string, example: "0.1.0" }
+        sessions: { type: integer, minimum: 0 }
+        queue: { $ref: "#/components/schemas/QueueCounters" }
+
+    QueueCounters:
+      type: object
+      required: [total, used, queued, pending]
+      properties:
+        total: { type: integer, minimum: 0 }
+        used: { type: integer, minimum: 0 }
+        queued: { type: integer, minimum: 0 }
+        pending: { type: integer, minimum: 0 }
+
+    StatusResponse:
+      type: object
+      required: [total, used, queued, pending, browsers, sessions]
+      properties:
+        total: { type: integer, minimum: 0 }
+        used: { type: integer, minimum: 0 }
+        queued: { type: integer, minimum: 0 }
+        pending: { type: integer, minimum: 0 }
+        browsers:
+          type: object
+          description: Browser name → list of available versions.
+          additionalProperties:
+            type: array
+            items: { type: string }
+        sessions:
+          type: array
+          items: { $ref: "#/components/schemas/SessionEntry" }
+
+    SessionEntry:
+      type: object
+      required: [id, browser, version, started]
+      properties:
+        id: { type: string }
+        browser: { type: string }
+        version: { type: string }
+        started: { type: string, format: date-time }
+
+    CreateSessionRequest:
+      type: object
+      description: |
+        W3C `capabilities.alwaysMatch` is preferred. Legacy
+        `desiredCapabilities` is accepted as a fallback. Mica
+        extensions live under `mica:options` (see
+        `MicaOptions`).
+      properties:
+        capabilities:
+          type: object
+          properties:
+            alwaysMatch:
+              type: object
+              additionalProperties: true
+        desiredCapabilities:
+          type: object
+          additionalProperties: true
+
+    MicaOptions:
+      type: object
+      description: |
+        Per-session knobs sent by clients under
+        `capabilities.alwaysMatch."mica:options"`. All optional.
+      properties:
+        sessionTimeout:
+          type: string
+          example: "10m"
+          description: Idle timeout cap; clamped to `--max-timeout`.
+        enableVNC: { type: boolean }
+        enableVideo: { type: boolean }
+        enableLog: { type: boolean }
+        screenResolution: { type: string, example: "1280x1024x24" }
+        videoFrameRate: { type: integer }
+        videoCodec: { type: string }
+        videoScreenSize: { type: string }
+        videoPreset: { type: string, example: "ultrafast" }
+        hideCursor: { type: boolean }
+        timeZone: { type: string, example: "UTC" }
+        name: { type: string, description: "Test name; becomes container label." }
+        s3KeyPattern:
+          type: string
+          description: |
+            Per-session S3 key template overriding `--s3-prefix`.
+            Tokens: `$fileName`, `$fileNameWithoutExt`,
+            `$fileExtension`, `$browserName`, `$browserVersion`,
+            `$sessionId`, `$fileType`, `$date`.
+        containerHostname: { type: string }
+        hostsEntries: { type: array, items: { type: string } }
+        dnsServers: { type: array, items: { type: string } }
+        applicationContainers: { type: array, items: { type: string } }
+        additionalNetworks: { type: array, items: { type: string } }
+        env: { type: array, items: { type: string } }
+        labels:
+          type: object
+          additionalProperties: { type: string }
+
+    CreateSessionResponse:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: object
+          required: [sessionId, capabilities]
+          properties:
+            sessionId: { type: string }
+            capabilities: { type: object, additionalProperties: true }
+
+    WdError:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: object
+          required: [error, message, stacktrace]
+          properties:
+            error:
+              type: string
+              enum:
+                - session not created
+                - invalid argument
+                - invalid session id
+                - unknown error
+            message: { type: string }
+            stacktrace: { type: string }

@@ -12,6 +12,7 @@ pub mod artifacts;
 pub mod bidi;
 pub mod create;
 pub mod health;
+pub mod openapi;
 pub mod ping;
 pub mod proxy;
 pub mod relay;
@@ -29,10 +30,11 @@ pub fn router(state: AppState) -> Router {
         // M9 T36 + /wd/hub/status alias for Selenium 4 GridAdmin clients.
         .route("/status", get(status::status))
         .route("/wd/hub/status", get(status::status))
-        // Production deployment surface: K8s-style health probes + Prometheus metrics.
+        // Production deployment surface: K8s-style health probes + Prometheus metrics + OpenAPI.
         .route("/healthz", get(health::healthz))
         .route("/readyz", get(health::readyz))
         .route("/metrics", get(health::metrics))
+        .route("/openapi.yaml", get(openapi::openapi_yaml))
         // M8
         .route("/wd/hub/session", post(create::create_session))
         .route("/wd/hub/session/:session_id", any(proxy::proxy_with_id))
