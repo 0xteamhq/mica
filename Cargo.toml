@@ -37,6 +37,8 @@ uuid = { version = "1", features = ["v4"] }
 async-trait = "0.1"
 bytes = "1"
 humantime = "2"
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-sdk-s3 = "1"
 
 [dev-dependencies]
 wiremock = "0.6"

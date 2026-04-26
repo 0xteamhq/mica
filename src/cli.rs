@@ -71,4 +71,16 @@ pub struct Args {
     /// Save all container logs (not only sessions with `enableLog`).
     #[arg(long, default_value_t = false)]
     pub save_all_logs: bool,
+
+    /// S3 bucket for artifact upload. Empty = upload disabled.
+    #[arg(long, default_value = "", env = "MICA_S3_BUCKET")]
+    pub s3_bucket: String,
+
+    /// S3 region (defaults to the AWS SDK default chain when empty).
+    #[arg(long, default_value = "", env = "MICA_S3_REGION")]
+    pub s3_region: String,
+
+    /// S3 key prefix prepended to every uploaded object.
+    #[arg(long, default_value = "", env = "MICA_S3_PREFIX")]
+    pub s3_prefix: String,
 }

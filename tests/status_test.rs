@@ -29,6 +29,9 @@ fn args() -> Args {
         disable_queue: false,
         graceful_period: Duration::from_secs(300),
         save_all_logs: false,
+        s3_bucket: String::new(),
+        s3_region: String::new(),
+        s3_prefix: String::new(),
     }
 }
 
