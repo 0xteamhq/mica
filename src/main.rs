@@ -1,4 +1,6 @@
+use arc_swap::ArcSwap;
 use clap::Parser;
+use mica::auth::{AuthState, AuthSwap, require_basic_auth};
 use mica::backend::Backend;
 use mica::backend::docker::DockerBackend;
 use mica::backend::k8s::K8sBackend;
@@ -173,7 +175,49 @@ async fn main() -> anyhow::Result<()> {
         .on_request(DefaultOnRequest::new().level(tracing::Level::DEBUG))
         .on_response(DefaultOnResponse::new().level(tracing::Level::DEBUG));
 
-    let app = handlers::router(state.clone()).layer(trace);
+    // Basic auth gate on the WebDriver / artifact / relay surface.
+    // Empty --users = no gate; any non-open path is allowed through.
+    let auth: AuthSwap = match AuthState::load(&args.users) {
+        Ok(s) => Arc::new(ArcSwap::from_pointee(s)),
+        Err(e) => {
+            anyhow::bail!("read --users {}: {e}", args.users);
+        }
+    };
+    if !args.users.is_empty() {
+        tracing::info!(path = %args.users, "HTTP Basic auth enabled");
+    }
+    // SIGHUP also reloads the htpasswd file alongside browsers.json.
+    #[cfg(unix)]
+    {
+        let users_path = args.users.clone();
+        let auth_for_reload = auth.clone();
+        tokio::spawn(async move {
+            use tokio::signal::unix::{SignalKind, signal};
+            if users_path.is_empty() {
+                return;
+            }
+            let mut hup = match signal(SignalKind::hangup()) {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+            while hup.recv().await.is_some() {
+                match AuthState::load(&users_path) {
+                    Ok(s) => {
+                        auth_for_reload.store(Arc::new(s));
+                        tracing::info!(path = %users_path, "users file reloaded");
+                    }
+                    Err(e) => tracing::warn!(error = %e, "users reload failed"),
+                }
+            }
+        });
+    }
+
+    let app = handlers::router(state.clone())
+        .layer(axum::middleware::from_fn_with_state(
+            auth.clone(),
+            require_basic_auth,
+        ))
+        .layer(trace);
 
     let listen = if args.listen.starts_with(':') {
         format!("0.0.0.0{}", args.listen)

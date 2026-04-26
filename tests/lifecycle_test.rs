@@ -51,6 +51,7 @@ fn args_with(timeout_ms: u64, retry_count: u32) -> Args {
         replica_id: String::new(),
         isolation: "auto".into(),
         plugin_dir: String::new(),
+        users: String::new(),
     }
 }
 

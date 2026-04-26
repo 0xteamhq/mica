@@ -43,6 +43,7 @@ fn args(limit: u32) -> Args {
         replica_id: String::new(),
         isolation: "auto".into(),
         plugin_dir: String::new(),
+        users: String::new(),
     }
 }
 

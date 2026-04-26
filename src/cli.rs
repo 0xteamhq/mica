@@ -150,4 +150,13 @@ pub struct Args {
     /// Directory of `.wasm` plugin components. Empty = no plugins.
     #[arg(long, default_value = "", env = "MICA_PLUGIN_DIR")]
     pub plugin_dir: String,
+
+    /// htpasswd file gating every WebDriver / VNC / artifact / relay
+    /// endpoint with HTTP Basic auth. Empty = open. Reloaded on
+    /// SIGHUP alongside browsers.json. Health (/healthz, /readyz),
+    /// liveness (/ping), metrics (/metrics), and the OpenAPI spec
+    /// (/openapi.yaml) stay open so K8s probes and Prometheus
+    /// scrapers don't need credentials.
+    #[arg(long, default_value = "", env = "MICA_USERS")]
+    pub users: String,
 }

@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod backend;
 pub mod caps;
 pub mod cli;
