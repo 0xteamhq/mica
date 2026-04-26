@@ -45,6 +45,7 @@ fn args_with(timeout_ms: u64, retry_count: u32) -> Args {
         k8s_namespace: "default".into(),
         k8s_runtime_class: String::new(),
         replica_id: String::new(),
+        isolation: "auto".into(),
     }
 }
 

@@ -5,6 +5,7 @@ pub mod config;
 pub mod error;
 pub mod events;
 pub mod handlers;
+pub mod isolation;
 pub mod pool;
 pub mod queue;
 pub mod session;

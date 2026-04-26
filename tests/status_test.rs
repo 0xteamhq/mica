@@ -39,6 +39,7 @@ fn args() -> Args {
         k8s_namespace: "default".into(),
         k8s_runtime_class: String::new(),
         replica_id: String::new(),
+        isolation: "auto".into(),
     }
 }
 

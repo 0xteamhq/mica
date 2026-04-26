@@ -116,4 +116,10 @@ pub struct Args {
     /// mica replica.
     #[arg(long, default_value = "", env = "MICA_REPLICA_ID")]
     pub replica_id: String,
+
+    /// Isolation driver. `auto` picks the strongest one the host
+    /// supports (KVM > runsc > runc). Explicit pins: runc | gvisor
+    /// | kata | firecracker | cloud_hypervisor.
+    #[arg(long, default_value = "auto", env = "MICA_ISOLATION")]
+    pub isolation: String,
 }

@@ -5,6 +5,7 @@ use mica::backend::k8s::K8sBackend;
 use mica::cli::Args;
 use mica::config::Config;
 use mica::handlers;
+use mica::isolation::capability::{Capabilities, select_driver};
 use mica::pool::PooledBackend;
 use mica::shutdown;
 use mica::state::AppState;
@@ -29,6 +30,19 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    // Phase 4: probe host capabilities and pick an isolation driver.
+    let caps = Capabilities::probe();
+    let driver = select_driver(Some(args.isolation.as_str()), &caps)
+        .map_err(|e| anyhow::anyhow!("isolation: {e}"))?;
+    tracing::info!(
+        kvm = caps.kvm,
+        runsc = caps.runsc,
+        kata_runtime = caps.kata_runtime,
+        k8s = caps.k8s_in_cluster,
+        selected = driver.name(),
+        "isolation capabilities probed"
+    );
+
     let raw_backend: Arc<dyn Backend> = match args.backend.as_str() {
         "k8s" => {
             let replica = if args.replica_id.is_empty() {
@@ -36,16 +50,25 @@ async fn main() -> anyhow::Result<()> {
             } else {
                 Some(args.replica_id.clone())
             };
+            // --isolation translates to a K8s RuntimeClass when it's
+            // a runtime-class-flavored driver. An explicit
+            // --k8s-runtime-class always wins over the inferred one.
+            let runtime_class = if !args.k8s_runtime_class.is_empty() {
+                Some(args.k8s_runtime_class.clone())
+            } else {
+                driver.k8s_runtime_class().map(|s| s.to_string())
+            };
             let b = K8sBackend::connect(args.k8s_namespace.clone(), replica)
                 .await
                 .map_err(|e| anyhow::anyhow!("k8s backend: {e}"))?
-                .with_runtime_class(if args.k8s_runtime_class.is_empty() {
-                    None
-                } else {
-                    Some(args.k8s_runtime_class.clone())
-                })
+                .with_runtime_class(runtime_class.clone())
                 .with_service_startup_timeout(args.service_startup_timeout);
-            tracing::info!(namespace = %args.k8s_namespace, replica_id = %b.replica_id(), "k8s backend selected");
+            tracing::info!(
+                namespace = %args.k8s_namespace,
+                replica_id = %b.replica_id(),
+                runtime_class = ?runtime_class,
+                "k8s backend selected"
+            );
             Arc::new(b)
         }
         _ => {
