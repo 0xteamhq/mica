@@ -16,6 +16,7 @@
 
 pub mod map;
 
+use crate::backend::HostPorts;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -27,6 +28,9 @@ type CancelCallback = Box<dyn FnOnce() + Send + 'static>;
 struct SessionInner {
     id: String,
     upstream: String,
+    host_ports: HostPorts,
+    browser_name: String,
+    browser_version: String,
     last_seen: Mutex<Instant>,
     idle_timeout: Duration,
     on_idle: Option<IdleCallback>,
@@ -73,6 +77,38 @@ impl Session {
         s
     }
 
+    /// Production-shaped session. Same wiring as
+    /// `new_with_idle_and_cancel` plus the extra metadata `/status`
+    /// and `/vnc` need (host ports, browser name + version).
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_full(
+        id: &str,
+        upstream: String,
+        host_ports: HostPorts,
+        browser_name: impl Into<String>,
+        browser_version: impl Into<String>,
+        idle: Duration,
+        on_idle: IdleCallback,
+        cancel: CancelCallback,
+    ) -> Self {
+        let inner = SessionInner {
+            id: id.into(),
+            upstream,
+            host_ports,
+            browser_name: browser_name.into(),
+            browser_version: browser_version.into(),
+            last_seen: Mutex::new(Instant::now()),
+            idle_timeout: idle,
+            on_idle: Some(on_idle),
+            cancel: Mutex::new(Some(cancel)),
+            cancel_idle: Mutex::new(None),
+            started: std::time::SystemTime::now(),
+        };
+        let s = Self(Arc::new(inner));
+        s.spawn_idle_watcher();
+        s
+    }
+
     fn new_inner(
         id: &str,
         upstream: String,
@@ -83,6 +119,9 @@ impl Session {
         Self(Arc::new(SessionInner {
             id: id.into(),
             upstream,
+            host_ports: HostPorts::default(),
+            browser_name: String::new(),
+            browser_version: String::new(),
             last_seen: Mutex::new(Instant::now()),
             idle_timeout: idle,
             on_idle,
@@ -97,6 +136,15 @@ impl Session {
     }
     pub fn upstream(&self) -> &str {
         &self.0.upstream
+    }
+    pub fn host_ports(&self) -> &HostPorts {
+        &self.0.host_ports
+    }
+    pub fn browser_name(&self) -> &str {
+        &self.0.browser_name
+    }
+    pub fn browser_version(&self) -> &str {
+        &self.0.browser_version
     }
     pub fn started(&self) -> std::time::SystemTime {
         self.0.started

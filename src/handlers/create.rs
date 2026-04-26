@@ -120,6 +120,7 @@ pub async fn create_session(
         .map_err(WdError::from)?;
     let upstream = started.upstream.clone();
     let container_id = started.container_id.clone();
+    let host_ports = started.host_ports.clone();
     // Arm the cancel-on-disconnect guard immediately.
     let guard = StopperGuard::new(started.stopper);
 
@@ -184,9 +185,12 @@ pub async fn create_session(
     });
 
     // (7) Register the session.
-    let session = Session::new_with_idle_and_cancel(
+    let session = Session::new_full(
         &session_id,
         upstream.clone(),
+        host_ports,
+        browser_name.clone(),
+        version.clone(),
         state.args.timeout,
         on_idle,
         cancel,
