@@ -7,13 +7,7 @@ license = "Apache-2.0"
 description = """
 Mica is a browser grid for the T-system. It runs as a single Rust binary and a \
 single Docker container — the same artifact you run locally is what runs in \
-production, anywhere in the world. Each test session gets its own isolated \
-browser sandbox (Docker container, Kubernetes pod, or microVM) via a pluggable \
-backend, and the orchestrator scales 0 → N with no vendor lock-in. Cold-start \
-floors range from ~200 ms (microVM + snapshot on bare-metal / KVM hosts) to \
-~400 ms (user-space sandbox on stock managed Kubernetes). Mica speaks the W3C \
-WebDriver protocol so existing Selenium / Playwright / WebDriver clients work \
-unchanged.
+production, anywhere in the world.
 """
 repository = "https://github.com/0xteam/mica"
 readme = "README.md"
