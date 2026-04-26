@@ -2,12 +2,18 @@ package mica:plugin@0.1.0;
 
 /// The world a mica plugin targets.
 ///
-/// All `export` interfaces are OPTIONAL — a plugin only implements
-/// the hooks it cares about. wit-bindgen generates default `pass`
-/// stubs for the rest. (Mica's host detects which interfaces a
-/// component actually exports and skips the rest at dispatch.)
+/// EXPORTS: a plugin component MUST implement every exported
+/// interface — the Component Model has no notion of "optional"
+/// exports. For hooks where a plugin has no opinion, return the
+/// no-op variant (`request-action.pass`, `upload-destination.keep`,
+/// `capabilities-decision.accept(caps)` with caps unchanged, etc.).
+/// wit-bindgen's generated `Guest` traits force this at compile
+/// time. If you genuinely only care about one hook, consider an
+/// alternate world declaration that exports just that interface
+/// (out-of-scope here; see 0XT-78 for whether the host supports
+/// multiple worlds).
 ///
-/// `import host-log` and `import clock` are always linked. The other
+/// IMPORTS: `host-log` and `clock` are always linked. The other
 /// imports are linked only when the operator grants the matching
 /// capability via `--plugin-grants <name>=http-client,s3-write,state`.
 /// A plugin importing a non-granted capability fails to instantiate

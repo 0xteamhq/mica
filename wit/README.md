@@ -32,12 +32,12 @@ Hooks are synchronous in the WIT (no `wasi:io/poll` exposed yet). The host runs 
 | `lifecycle.init` | 10 s | `--plugin-init-timeout` |
 | `lifecycle.shutdown` | 5 s | `--plugin-shutdown-timeout` |
 | `session.on-create` | 5 s (sum across plugins) | `--plugin-on-create-timeout` |
-| `session.on-end` | best-effort, no timeout | — |
-| `artifact.on-file-created` | best-effort, no timeout | — |
+| `session.on-end` | 60 s (per plugin, best-effort) | `--plugin-on-end-timeout` |
+| `artifact.on-file-created` | 60 s (per plugin, best-effort) | `--plugin-on-file-created-timeout` |
 | `http.intercept-request` | 200 ms (sum across plugins) | `--plugin-http-timeout` |
 | `http.intercept-response` | 200 ms (sum across plugins) | `--plugin-http-timeout` |
 
-Exceeding `on-create` or `intercept-request` returns 503 to the WebDriver client. Best-effort hooks are logged at warn level on timeout.
+Exceeding `on-create` or `intercept-request` returns 503 to the WebDriver client. Best-effort hooks (`on-end`, `on-file-created`) timeout silently with a warn-level log; mica does not retry.
 
 ## Capability grants
 

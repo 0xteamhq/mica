@@ -18,9 +18,10 @@ interface types {
     nanos: u32,
   }
 
-  /// Single key/value pair. Used for headers, env, labels — anywhere
-  /// the source map allows duplicates (HTTP headers do, env doesn't,
-  /// labels don't, but a list keeps the wire format uniform).
+  /// Single key/value pair. Used for HTTP headers and capability
+  /// labels. Lists of `header` permit duplicate names (HTTP headers
+  /// do per RFC 9110 § 5.2; labels don't but the host de-dupes on
+  /// the way in).
   record header {
     name: string,
     value: string,
