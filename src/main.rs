@@ -126,8 +126,22 @@ async fn main() -> anyhow::Result<()> {
     let mut state = state;
     if !args.plugin_dir.is_empty() {
         let grants = mica::plugins::GrantTable::parse(&args.plugin_grants);
+        let needs_s3 = grants.any_has(mica::plugins::Capability::S3Write);
+        let s3_client = if needs_s3 {
+            let mut loader = aws_config::defaults(aws_config::BehaviorVersion::latest());
+            if !args.s3_region.is_empty() {
+                loader = loader.region(aws_sdk_s3::config::Region::new(args.s3_region.clone()));
+            }
+            Some(aws_sdk_s3::Client::new(&loader.load().await))
+        } else {
+            None
+        };
         match mica::plugins::PluginHost::with_grants(grants) {
-            Ok(host) => {
+            Ok(mut host) => {
+                if let Some(c) = s3_client {
+                    host = host.with_s3(c);
+                    tracing::info!("plugin s3-write capability available");
+                }
                 let path = std::path::PathBuf::from(&args.plugin_dir);
                 if let Err(e) = host.load_dir(&path).await {
                     tracing::warn!(error = %e, "plugin dir scan failed");

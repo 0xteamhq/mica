@@ -100,6 +100,13 @@ impl GrantTable {
     pub fn for_plugin(&self, name: &str) -> HashSet<Capability> {
         self.inner.get(name).cloned().unwrap_or_default()
     }
+
+    /// Returns `true` when any plugin in the grant table is granted
+    /// the named capability. Used by `main.rs` to decide whether to
+    /// eagerly build shared host clients (S3, etc.).
+    pub fn any_has(&self, c: Capability) -> bool {
+        self.inner.values().any(|set| set.contains(&c))
+    }
 }
 
 mod bindings {
@@ -154,6 +161,9 @@ pub struct HostState {
     /// capability. None when not granted (the WIT method is
     /// unreachable since the host import isn't linked).
     http: Option<reqwest::Client>,
+    /// Shared S3 client for plugins granted the `s3-write` capability.
+    /// None when not granted.
+    s3: Option<aws_sdk_s3::Client>,
 }
 
 impl WasiView for HostState {
@@ -195,6 +205,50 @@ impl bindings::mica::plugin::clock::Host for HostState {
                 nanos: 0,
             },
         }
+    }
+}
+
+// s3-write: capability-gated. Linked into a plugin's linker only
+// when `--plugin-grants <name>=s3-write` includes this plugin. The
+// host runs PutObject via aws-sdk-s3 with the same default credential
+// chain mica's S3Uploader uses (env / IMDS / shared credentials file).
+// Plugins get *only* PutObject — no read, no list, no delete — per
+// the documented contract in wit/host.wit.
+#[async_trait]
+impl bindings::mica::plugin::s3_write::Host for HostState {
+    async fn put(
+        &mut self,
+        bucket: String,
+        key: String,
+        body: Vec<u8>,
+        content_type: Option<String>,
+    ) -> Result<(), WitPluginError> {
+        let client = self.s3.as_ref().ok_or_else(|| WitPluginError {
+            code: "no-s3-client".into(),
+            message: "s3-write not granted to this plugin".into(),
+            transient: false,
+        })?;
+        let body_stream = aws_sdk_s3::primitives::ByteStream::from(body);
+        let mut req = client
+            .put_object()
+            .bucket(&bucket)
+            .key(&key)
+            .body(body_stream);
+        if let Some(ct) = content_type {
+            req = req.content_type(ct);
+        }
+        req.send().await.map_err(|e| WitPluginError {
+            code: "s3-put".into(),
+            message: format!("{e}"),
+            // SDK errors don't carry a clean transient flag; treat
+            // anything other than auth / config as potentially
+            // retryable.
+            transient: !matches!(
+                e.as_service_error().map(|s| s.meta().code().unwrap_or("")),
+                Some("InvalidAccessKeyId") | Some("SignatureDoesNotMatch")
+            ),
+        })?;
+        Ok(())
     }
 }
 
@@ -274,6 +328,7 @@ pub struct PluginHost {
     plugins: Arc<Mutex<Vec<Plugin>>>,
     grants: Arc<GrantTable>,
     http: reqwest::Client,
+    s3: Option<aws_sdk_s3::Client>,
 }
 
 impl PluginHost {
@@ -295,7 +350,16 @@ impl PluginHost {
             plugins: Arc::new(Mutex::new(Vec::new())),
             grants: Arc::new(grants),
             http,
+            s3: None,
         })
+    }
+
+    /// Attach an S3 client. Required when any plugin in the grant
+    /// table includes `s3-write`; ignored otherwise. Reuses the same
+    /// AWS credential chain as the built-in S3Uploader.
+    pub fn with_s3(mut self, client: aws_sdk_s3::Client) -> Self {
+        self.s3 = Some(client);
+        self
     }
 
     pub async fn load_dir(&self, dir: &Path) -> anyhow::Result<()> {
@@ -359,6 +423,13 @@ impl PluginHost {
             bindings::mica::plugin::http_client::add_to_linker(&mut linker, |s: &mut HostState| s)
                 .context("http-client link")?;
         }
+        if granted.contains(&Capability::S3Write) {
+            if self.s3.is_none() {
+                tracing::warn!(plugin = %plugin_name, "s3-write granted but no S3 client attached on PluginHost");
+            }
+            bindings::mica::plugin::s3_write::add_to_linker(&mut linker, |s: &mut HostState| s)
+                .context("s3-write link")?;
+        }
         Ok(linker)
     }
 
@@ -371,6 +442,11 @@ impl PluginHost {
         } else {
             None
         };
+        let s3 = if granted.contains(&Capability::S3Write) {
+            self.s3.clone()
+        } else {
+            None
+        };
         wasmtime::Store::new(
             &self.engine,
             HostState {
@@ -378,6 +454,7 @@ impl PluginHost {
                 wasi,
                 plugin_name: plugin_name.to_string(),
                 http,
+                s3,
             },
         )
     }
@@ -569,6 +646,16 @@ mod tests {
     fn grant_table_malformed_entries_skipped() {
         let g = GrantTable::parse(";=;noequalshere;p=http-client");
         assert!(g.for_plugin("p").contains(&Capability::HttpClient));
+    }
+
+    #[test]
+    fn grant_table_any_has() {
+        let g = GrantTable::parse("a=http-client;b=s3-write,state");
+        assert!(g.any_has(Capability::HttpClient));
+        assert!(g.any_has(Capability::S3Write));
+        assert!(g.any_has(Capability::State));
+        let empty = GrantTable::parse("");
+        assert!(!empty.any_has(Capability::HttpClient));
     }
 
     #[tokio::test]
