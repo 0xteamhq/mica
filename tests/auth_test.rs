@@ -49,6 +49,7 @@ fn args() -> Args {
         plugin_dir: String::new(),
         users: String::new(),
         plugin_grants: String::new(),
+        plugin_state_dir: String::new(),
     }
 }
 

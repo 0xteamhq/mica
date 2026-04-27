@@ -136,11 +136,25 @@ async fn main() -> anyhow::Result<()> {
         } else {
             None
         };
+        let needs_state = grants.any_has(mica::plugins::Capability::State);
         match mica::plugins::PluginHost::with_grants(grants) {
             Ok(mut host) => {
                 if let Some(c) = s3_client {
                     host = host.with_s3(c);
                     tracing::info!("plugin s3-write capability available");
+                }
+                if needs_state {
+                    let dir = if args.plugin_state_dir.is_empty() {
+                        std::env::temp_dir().join("mica-plugin-state")
+                    } else {
+                        std::path::PathBuf::from(&args.plugin_state_dir)
+                    };
+                    if let Err(e) = std::fs::create_dir_all(&dir) {
+                        tracing::warn!(error = %e, dir = %dir.display(), "plugin state dir create failed; state capability disabled");
+                    } else {
+                        host = host.with_state_dir(dir.clone());
+                        tracing::info!(dir = %dir.display(), "plugin state capability available");
+                    }
                 }
                 let path = std::path::PathBuf::from(&args.plugin_dir);
                 if let Err(e) = host.load_dir(&path).await {

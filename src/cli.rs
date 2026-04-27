@@ -161,6 +161,14 @@ pub struct Args {
     #[arg(long, default_value = "", env = "MICA_PLUGIN_GRANTS")]
     pub plugin_grants: String,
 
+    /// Directory backing the plugin `state` capability. When unset,
+    /// plugins granted `state` get their own scratch dir under
+    /// `${TMPDIR}/mica-plugin-state` so the binary still runs without
+    /// operator setup; production deployments should pass a durable
+    /// path so plugin state survives mica restarts.
+    #[arg(long, default_value = "", env = "MICA_PLUGIN_STATE_DIR")]
+    pub plugin_state_dir: String,
+
     /// htpasswd file gating every WebDriver / VNC / artifact / relay
     /// endpoint with HTTP Basic auth. Empty = open. Reloaded on
     /// SIGHUP alongside browsers.json. Health (/healthz, /readyz),

@@ -164,6 +164,9 @@ pub struct HostState {
     /// Shared S3 client for plugins granted the `s3-write` capability.
     /// None when not granted.
     s3: Option<aws_sdk_s3::Client>,
+    /// Per-plugin state-dir root for plugins granted `state`. None
+    /// when not granted. Subkeys land at `<root>/<plugin>/<key>`.
+    state_dir: Option<PathBuf>,
 }
 
 impl WasiView for HostState {
@@ -204,6 +207,95 @@ impl bindings::mica::plugin::clock::Host for HostState {
                 seconds: 0,
                 nanos: 0,
             },
+        }
+    }
+}
+
+// state: capability-gated. File-backed KV per plugin, namespaced by
+// plugin name. Persisted under `--plugin-state-dir/<plugin>/<key>`.
+// Bound to a few MB conceptually (no hard cap today; the file system
+// enforces what it enforces). Designed for tokens / cursors, not
+// bulk data. The plugin sees only its own namespace.
+fn safe_key_path(root: &Path, plugin: &str, key: &str) -> Option<PathBuf> {
+    // Reject path traversal and absolute keys at the boundary.
+    if key.is_empty() || key.contains("..") || key.starts_with('/') || key.contains('\0') {
+        return None;
+    }
+    Some(root.join(plugin).join(key))
+}
+
+#[async_trait]
+impl bindings::mica::plugin::state::Host for HostState {
+    async fn get(&mut self, key: String) -> Result<Option<Vec<u8>>, WitPluginError> {
+        let root = self.state_dir.as_ref().ok_or_else(|| WitPluginError {
+            code: "no-state".into(),
+            message: "state not granted to this plugin".into(),
+            transient: false,
+        })?;
+        let path = safe_key_path(root, &self.plugin_name, &key).ok_or_else(|| WitPluginError {
+            code: "bad-key".into(),
+            message: format!("invalid state key: {key}"),
+            transient: false,
+        })?;
+        match tokio::fs::read(&path).await {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(WitPluginError {
+                code: "state-read".into(),
+                message: format!("{e}"),
+                transient: true,
+            }),
+        }
+    }
+
+    async fn put(&mut self, key: String, value: Vec<u8>) -> Result<(), WitPluginError> {
+        let root = self.state_dir.as_ref().ok_or_else(|| WitPluginError {
+            code: "no-state".into(),
+            message: "state not granted to this plugin".into(),
+            transient: false,
+        })?;
+        let path = safe_key_path(root, &self.plugin_name, &key).ok_or_else(|| WitPluginError {
+            code: "bad-key".into(),
+            message: format!("invalid state key: {key}"),
+            transient: false,
+        })?;
+        if let Some(parent) = path.parent() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| WitPluginError {
+                    code: "state-mkdir".into(),
+                    message: format!("{e}"),
+                    transient: true,
+                })?;
+        }
+        tokio::fs::write(&path, &value)
+            .await
+            .map_err(|e| WitPluginError {
+                code: "state-write".into(),
+                message: format!("{e}"),
+                transient: true,
+            })
+    }
+
+    async fn delete(&mut self, key: String) -> Result<(), WitPluginError> {
+        let root = self.state_dir.as_ref().ok_or_else(|| WitPluginError {
+            code: "no-state".into(),
+            message: "state not granted to this plugin".into(),
+            transient: false,
+        })?;
+        let path = safe_key_path(root, &self.plugin_name, &key).ok_or_else(|| WitPluginError {
+            code: "bad-key".into(),
+            message: format!("invalid state key: {key}"),
+            transient: false,
+        })?;
+        match tokio::fs::remove_file(&path).await {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(WitPluginError {
+                code: "state-delete".into(),
+                message: format!("{e}"),
+                transient: true,
+            }),
         }
     }
 }
@@ -329,6 +421,7 @@ pub struct PluginHost {
     grants: Arc<GrantTable>,
     http: reqwest::Client,
     s3: Option<aws_sdk_s3::Client>,
+    state_dir: Option<PathBuf>,
 }
 
 impl PluginHost {
@@ -351,6 +444,7 @@ impl PluginHost {
             grants: Arc::new(grants),
             http,
             s3: None,
+            state_dir: None,
         })
     }
 
@@ -359,6 +453,13 @@ impl PluginHost {
     /// AWS credential chain as the built-in S3Uploader.
     pub fn with_s3(mut self, client: aws_sdk_s3::Client) -> Self {
         self.s3 = Some(client);
+        self
+    }
+
+    /// Set the root directory backing the `state` capability. Each
+    /// granted plugin sees its own namespaced subdirectory.
+    pub fn with_state_dir(mut self, dir: PathBuf) -> Self {
+        self.state_dir = Some(dir);
         self
     }
 
@@ -430,6 +531,13 @@ impl PluginHost {
             bindings::mica::plugin::s3_write::add_to_linker(&mut linker, |s: &mut HostState| s)
                 .context("s3-write link")?;
         }
+        if granted.contains(&Capability::State) {
+            if self.state_dir.is_none() {
+                tracing::warn!(plugin = %plugin_name, "state granted but no state dir attached on PluginHost");
+            }
+            bindings::mica::plugin::state::add_to_linker(&mut linker, |s: &mut HostState| s)
+                .context("state link")?;
+        }
         Ok(linker)
     }
 
@@ -447,6 +555,11 @@ impl PluginHost {
         } else {
             None
         };
+        let state_dir = if granted.contains(&Capability::State) {
+            self.state_dir.clone()
+        } else {
+            None
+        };
         wasmtime::Store::new(
             &self.engine,
             HostState {
@@ -455,6 +568,7 @@ impl PluginHost {
                 plugin_name: plugin_name.to_string(),
                 http,
                 s3,
+                state_dir,
             },
         )
     }
@@ -646,6 +760,25 @@ mod tests {
     fn grant_table_malformed_entries_skipped() {
         let g = GrantTable::parse(";=;noequalshere;p=http-client");
         assert!(g.for_plugin("p").contains(&Capability::HttpClient));
+    }
+
+    #[test]
+    fn state_safe_key_rejects_traversal() {
+        let root = std::path::Path::new("/var/lib/mica/state");
+        assert!(safe_key_path(root, "p", "../etc/passwd").is_none());
+        assert!(safe_key_path(root, "p", "/abs").is_none());
+        assert!(safe_key_path(root, "p", "").is_none());
+        assert!(safe_key_path(root, "p", "ok\0bad").is_none());
+        assert_eq!(
+            safe_key_path(root, "p", "token"),
+            Some(std::path::PathBuf::from("/var/lib/mica/state/p/token"))
+        );
+        assert_eq!(
+            safe_key_path(root, "p", "subdir/cursor"),
+            Some(std::path::PathBuf::from(
+                "/var/lib/mica/state/p/subdir/cursor"
+            ))
+        );
     }
 
     #[test]
