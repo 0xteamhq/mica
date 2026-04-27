@@ -120,11 +120,28 @@ mod bindings {
 use bindings::Plugin as PluginInstance;
 use bindings::exports::mica::plugin::artifact::UploadDestination;
 use bindings::exports::mica::plugin::lifecycle::Config as WitConfig;
+use bindings::exports::mica::plugin::session::CapabilitiesDecision;
 use bindings::mica::plugin::host_log::Level as HostLogLevel;
 use bindings::mica::plugin::types::{
-    ArtifactKind as WitArtifactKind, FileInfo as WitFileInfo, HttpRequest as WitHttpRequest,
-    HttpResponse as WitHttpResponse, Instant as WitInstant, PluginError as WitPluginError,
+    ArtifactKind as WitArtifactKind, Capabilities as WitCapabilities, FileInfo as WitFileInfo,
+    Header as WitHeader, HttpRequest as WitHttpRequest, HttpResponse as WitHttpResponse,
+    Instant as WitInstant, PluginError as WitPluginError,
 };
+
+/// Resolution of the `session.on-create` plugin chain.
+///
+/// `Accept` is boxed so the enum doesn't carry the full ~600-byte
+/// `Caps` size on the `Reject` variant — clippy's
+/// `large-enum-variant` lint flagged the heap-of-stack imbalance.
+#[derive(Debug, Clone)]
+pub enum SessionDecision {
+    /// All plugins accepted; mica proceeds with these (possibly
+    /// mutated) caps.
+    Accept(Box<crate::caps::Caps>),
+    /// A plugin refused the session. Mica returns `session not
+    /// created` to the WebDriver client with this reason.
+    Reject(String),
+}
 
 /// Resolution of the artifact-handler chain. Cancel-hook callers
 /// switch on this to decide what to do with the on-disk artifact.
@@ -624,6 +641,87 @@ impl PluginHost {
         }
     }
 
+    /// Run the `session.on-create` plugin chain. Plugins see the
+    /// previous plugin's mutated caps; the first `reject` wins and
+    /// short-circuits. Wraps the whole chain in `total_timeout` so
+    /// a slow plugin can't stall a new-session attempt. WIT errors
+    /// and wasm traps fall through to the next plugin (treated as
+    /// `accept(caps)` for that plugin) so a misbehaving plugin can't
+    /// strand the chain.
+    pub async fn session_decision(
+        &self,
+        session_id: &str,
+        caps: &crate::caps::Caps,
+        total_timeout: Duration,
+    ) -> SessionDecision {
+        let plugins = self.plugins.lock().await;
+        if plugins.is_empty() {
+            return SessionDecision::Accept(Box::new(caps.clone()));
+        }
+        let inner = async {
+            let mut current = caps.clone();
+            for plugin in plugins.iter() {
+                let linker = match self.build_linker_for(&plugin.name) {
+                    Ok(l) => l,
+                    Err(err) => {
+                        tracing::warn!(plugin = %plugin.name, error = %err, "linker setup failed; skipping");
+                        continue;
+                    }
+                };
+                let mut store = self.fresh_store(&plugin.name);
+                let inst = match PluginInstance::instantiate_async(
+                    &mut store,
+                    &plugin.component,
+                    &linker,
+                )
+                .await
+                {
+                    Ok(i) => i,
+                    Err(err) => {
+                        tracing::warn!(plugin = %plugin.name, error = %err, "plugin instantiate failed; skipping");
+                        continue;
+                    }
+                };
+                let wit_caps = caps_to_wit(&current);
+                let sid = session_id.to_string();
+                let result = inst
+                    .mica_plugin_session()
+                    .call_on_create(&mut store, &sid, &wit_caps)
+                    .await;
+                match result {
+                    Ok(Ok(CapabilitiesDecision::Accept(new_caps))) => {
+                        wit_to_caps(new_caps, &mut current);
+                    }
+                    Ok(Ok(CapabilitiesDecision::Reject(reason))) => {
+                        tracing::info!(plugin = %plugin.name, reason = %reason, "plugin rejected session");
+                        return SessionDecision::Reject(reason);
+                    }
+                    Ok(Err(err)) => {
+                        tracing::warn!(plugin = %plugin.name, code = %err.code, message = %err.message, "plugin session.on_create returned error; treating as accept-unchanged");
+                    }
+                    Err(err) => {
+                        tracing::warn!(plugin = %plugin.name, error = %err, "plugin session.on_create wasm trap; treating as accept-unchanged");
+                    }
+                }
+            }
+            SessionDecision::Accept(Box::new(current))
+        };
+        if total_timeout.is_zero() {
+            inner.await
+        } else {
+            match tokio::time::timeout(total_timeout, inner).await {
+                Ok(r) => r,
+                Err(_) => {
+                    tracing::warn!(
+                        timeout_ms = total_timeout.as_millis() as u64,
+                        "session.on_create chain timed out; rejecting"
+                    );
+                    SessionDecision::Reject("plugin chain timed out".into())
+                }
+            }
+        }
+    }
+
     /// Run the plugin chain over a `FileCreated` and resolve to an
     /// `ArtifactVerdict`. Plugins are called in load order; first
     /// non-`Keep` wins. Errors / wasm traps in a plugin are treated
@@ -702,6 +800,55 @@ impl PluginHost {
         }
         ArtifactVerdict::Keep
     }
+}
+
+/// Convert mica's full `Caps` into the WIT `capabilities` subset.
+/// Lossy — fields the WIT doesn't model (session_timeout, video_*
+/// tuning, S3 templating, container_hostname, etc.) stay on the
+/// host-side `Caps` and are restored verbatim by `wit_to_caps`.
+fn caps_to_wit(c: &crate::caps::Caps) -> WitCapabilities {
+    WitCapabilities {
+        browser_name: c.browser_name.clone(),
+        browser_version: c.browser_version.clone(),
+        platform: c.platform.clone(),
+        enable_vnc: c.enable_vnc,
+        enable_video: c.enable_video,
+        enable_log: c.enable_log,
+        screen_resolution: c.screen_resolution.clone(),
+        video_name: c.video_name.clone(),
+        log_name: c.log_name.clone(),
+        time_zone: c.time_zone.clone(),
+        name: c.name.clone(),
+        env: c.env.clone(),
+        labels: c
+            .labels
+            .iter()
+            .map(|(k, v)| WitHeader {
+                name: k.clone(),
+                value: v.clone(),
+            })
+            .collect(),
+    }
+}
+
+/// Apply a plugin's mutated WIT capabilities back to the host-side
+/// `Caps`. Only fields the WIT models are touched; everything else
+/// (session_timeout, s3_key_pattern, additional_networks, …) is
+/// preserved.
+fn wit_to_caps(w: WitCapabilities, into: &mut crate::caps::Caps) {
+    into.browser_name = w.browser_name;
+    into.browser_version = w.browser_version;
+    into.platform = w.platform;
+    into.enable_vnc = w.enable_vnc;
+    into.enable_video = w.enable_video;
+    into.enable_log = w.enable_log;
+    into.screen_resolution = w.screen_resolution;
+    into.video_name = w.video_name;
+    into.log_name = w.log_name;
+    into.time_zone = w.time_zone;
+    into.name = w.name;
+    into.env = w.env;
+    into.labels = w.labels.into_iter().map(|h| (h.name, h.value)).collect();
 }
 
 #[cfg(test)]

@@ -169,6 +169,12 @@ pub struct Args {
     #[arg(long, default_value = "", env = "MICA_PLUGIN_STATE_DIR")]
     pub plugin_state_dir: String,
 
+    /// Total time budget across the entire session.on-create plugin
+    /// chain. Exceeding it is treated as transient; mica returns
+    /// `session not created` to the client. 0 disables the timeout.
+    #[arg(long, default_value = "5s", value_parser = parse_duration)]
+    pub plugin_on_create_timeout: Duration,
+
     /// htpasswd file gating every WebDriver / VNC / artifact / relay
     /// endpoint with HTTP Basic auth. Empty = open. Reloaded on
     /// SIGHUP alongside browsers.json. Health (/healthz, /readyz),

@@ -99,7 +99,29 @@ async fn create_session_inner(
     let started_at = Instant::now();
 
     // (1) Caps
-    let caps = Caps::parse(&body).map_err(|e| WdError::invalid_argument(e.to_string()))?;
+    let mut caps = Caps::parse(&body).map_err(|e| WdError::invalid_argument(e.to_string()))?;
+
+    // (1b) session.on-create plugin chain. Runs BEFORE queue acquire
+    // so a reject doesn't burn a permit. The chain runs under the
+    // `--plugin-on-create-timeout` budget; exceeding it rejects.
+    if let Some(host) = state.plugins.as_ref() {
+        let preliminary_session_id = uuid::Uuid::new_v4().to_string();
+        match host
+            .session_decision(
+                &preliminary_session_id,
+                &caps,
+                state.args.plugin_on_create_timeout,
+            )
+            .await
+        {
+            crate::plugins::SessionDecision::Accept(new_caps) => {
+                caps = *new_caps;
+            }
+            crate::plugins::SessionDecision::Reject(reason) => {
+                return Err(WdError::session_not_created(reason));
+            }
+        }
+    }
 
     // (2) Queue
     let no_wait = state.args.disable_queue

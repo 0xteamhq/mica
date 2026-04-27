@@ -46,6 +46,7 @@ fn args() -> Args {
         users: String::new(),
         plugin_grants: String::new(),
         plugin_state_dir: String::new(),
+        plugin_on_create_timeout: Duration::from_secs(5),
     }
 }
 
