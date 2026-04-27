@@ -175,6 +175,12 @@ pub struct Args {
     #[arg(long, default_value = "5s", value_parser = parse_duration)]
     pub plugin_on_create_timeout: Duration,
 
+    /// Per-plugin time budget for `lifecycle.shutdown` during
+    /// graceful shutdown. Plugins exceeding it are dropped without
+    /// completing flush; mica logs and continues exiting.
+    #[arg(long, default_value = "5s", value_parser = parse_duration)]
+    pub plugin_shutdown_timeout: Duration,
+
     /// htpasswd file gating every WebDriver / VNC / artifact / relay
     /// endpoint with HTTP Basic auth. Empty = open. Reloaded on
     /// SIGHUP alongside browsers.json. Health (/healthz, /readyz),

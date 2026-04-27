@@ -268,12 +268,23 @@ async fn main() -> anyhow::Result<()> {
     // --graceful-period.
     let serve_state = state.clone();
     let graceful = args.graceful_period;
+    let shutdown_timeout = args.plugin_shutdown_timeout;
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             shutdown::signal_future().await;
             tracing::info!(?graceful, "draining sessions");
             shutdown::drain(serve_state.sessions.clone(), graceful).await;
             tracing::info!("drain complete");
+            // Drain runs every active session's cancel hook (which
+            // includes plugin session.on-end). Once that's done, give
+            // each plugin a chance to flush state via lifecycle.shutdown.
+            // Any plugin exceeding `--plugin-shutdown-timeout` is
+            // dropped and we proceed to exit.
+            if let Some(host) = serve_state.plugins.as_ref() {
+                tracing::info!(?shutdown_timeout, "running plugin lifecycle.shutdown");
+                host.shutdown_all(shutdown_timeout).await;
+                tracing::info!("plugin shutdown complete");
+            }
         })
         .await?;
     Ok(())

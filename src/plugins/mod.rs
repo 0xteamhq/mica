@@ -722,6 +722,53 @@ impl PluginHost {
         }
     }
 
+    /// Call `lifecycle.shutdown` on every loaded plugin. Per-plugin
+    /// `timeout` budget; exceeded plugins are dropped and logged.
+    /// Errors / wasm traps log at WARN; mica still proceeds with
+    /// exit. Best-effort flush — the WIT contract spells out that
+    /// the host may drop the component after the budget expires.
+    pub async fn shutdown_all(&self, timeout: Duration) {
+        let plugins = self.plugins.lock().await;
+        if plugins.is_empty() {
+            return;
+        }
+        for plugin in plugins.iter() {
+            let linker = match self.build_linker_for(&plugin.name) {
+                Ok(l) => l,
+                Err(err) => {
+                    tracing::warn!(plugin = %plugin.name, error = %err, "linker setup failed; skipping shutdown");
+                    continue;
+                }
+            };
+            let mut store = self.fresh_store(&plugin.name);
+            let inst = match PluginInstance::instantiate_async(
+                &mut store,
+                &plugin.component,
+                &linker,
+            )
+            .await
+            {
+                Ok(i) => i,
+                Err(err) => {
+                    tracing::warn!(plugin = %plugin.name, error = %err, "plugin instantiate failed during shutdown");
+                    continue;
+                }
+            };
+            let call = inst.mica_plugin_lifecycle().call_shutdown(&mut store);
+            match tokio::time::timeout(timeout, call).await {
+                Ok(Ok(())) => {
+                    tracing::info!(plugin = %plugin.name, "plugin lifecycle.shutdown ok");
+                }
+                Ok(Err(err)) => {
+                    tracing::warn!(plugin = %plugin.name, error = %err, "plugin lifecycle.shutdown wasm trap");
+                }
+                Err(_) => {
+                    tracing::warn!(plugin = %plugin.name, timeout_ms = timeout.as_millis() as u64, "plugin lifecycle.shutdown timed out; dropping");
+                }
+            }
+        }
+    }
+
     /// Fan a session-end notification out to every plugin's
     /// `session.on-end`. Best-effort: WIT errors and wasm traps are
     /// logged at WARN; mica does NOT retry. Each plugin runs in its
@@ -1025,6 +1072,12 @@ mod tests {
         assert!(g.any_has(Capability::State));
         let empty = GrantTable::parse("");
         assert!(!empty.any_has(Capability::HttpClient));
+    }
+
+    #[tokio::test]
+    async fn shutdown_all_on_empty_host_is_noop() {
+        let host = PluginHost::new().expect("engine");
+        host.shutdown_all(Duration::from_secs(1)).await;
     }
 
     #[tokio::test]
