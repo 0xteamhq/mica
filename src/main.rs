@@ -137,8 +137,16 @@ async fn main() -> anyhow::Result<()> {
             None
         };
         let needs_state = grants.any_has(mica::plugins::Capability::State);
+        let configs = match mica::plugins::PluginConfigs::load(&args.plugin_config) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!(error = %e, path = %args.plugin_config, "plugin config load failed; using empty config");
+                mica::plugins::PluginConfigs::empty()
+            }
+        };
         match mica::plugins::PluginHost::with_grants(grants) {
             Ok(mut host) => {
+                host = host.with_configs(configs);
                 if let Some(c) = s3_client {
                     host = host.with_s3(c);
                     tracing::info!("plugin s3-write capability available");

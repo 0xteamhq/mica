@@ -181,6 +181,15 @@ pub struct Args {
     #[arg(long, default_value = "5s", value_parser = parse_duration)]
     pub plugin_shutdown_timeout: Duration,
 
+    /// Per-plugin configuration TOML. Each `[plugins.<name>]` table
+    /// is flattened to `list<header>` and passed to that plugin's
+    /// `lifecycle.init`. Only string-, integer-, float- and bool-
+    /// scalar values are honored; nested tables produce a warning
+    /// and are skipped. Empty path = no per-plugin config (init
+    /// receives an empty header list).
+    #[arg(long, default_value = "", env = "MICA_PLUGIN_CONFIG")]
+    pub plugin_config: String,
+
     /// htpasswd file gating every WebDriver / VNC / artifact / relay
     /// endpoint with HTTP Basic auth. Empty = open. Reloaded on
     /// SIGHUP alongside browsers.json. Health (/healthz, /readyz),

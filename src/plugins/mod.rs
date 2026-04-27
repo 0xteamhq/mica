@@ -57,6 +57,70 @@ impl Capability {
     }
 }
 
+/// Per-plugin configuration parsed from `--plugin-config <path.toml>`.
+///
+/// Layout: `[plugins.<name>]` tables map to `Vec<(key, value)>` for
+/// each plugin name. Scalar values (string / int / float / bool) are
+/// stringified; nested tables produce a warning and are skipped (the
+/// WIT contract uses `list<header>` for config so deep structure
+/// can't round-trip cleanly).
+#[derive(Debug, Clone, Default)]
+pub struct PluginConfigs {
+    inner: HashMap<String, Vec<(String, String)>>,
+}
+
+impl PluginConfigs {
+    pub fn empty() -> Self {
+        Self::default()
+    }
+
+    pub fn load(path: &str) -> std::io::Result<Self> {
+        if path.is_empty() {
+            return Ok(Self::empty());
+        }
+        let raw = std::fs::read_to_string(path)?;
+        Self::parse(&raw).map_err(|e| std::io::Error::other(format!("plugin-config: {e}")))
+    }
+
+    pub fn parse(raw: &str) -> Result<Self, String> {
+        let value: toml::Value = toml::from_str(raw).map_err(|e| e.to_string())?;
+        let mut inner: HashMap<String, Vec<(String, String)>> = HashMap::new();
+        let plugins = match value.get("plugins") {
+            Some(toml::Value::Table(t)) => t,
+            Some(_) => return Err("'plugins' must be a table".into()),
+            None => return Ok(Self { inner }),
+        };
+        for (name, body) in plugins {
+            let table = match body {
+                toml::Value::Table(t) => t,
+                _ => {
+                    tracing::warn!(plugin = %name, "plugins.<name> must be a table; skipping");
+                    continue;
+                }
+            };
+            let mut pairs = Vec::new();
+            for (key, val) in table {
+                match val {
+                    toml::Value::String(s) => pairs.push((key.clone(), s.clone())),
+                    toml::Value::Integer(i) => pairs.push((key.clone(), i.to_string())),
+                    toml::Value::Float(f) => pairs.push((key.clone(), f.to_string())),
+                    toml::Value::Boolean(b) => pairs.push((key.clone(), b.to_string())),
+                    _ => {
+                        tracing::warn!(plugin = %name, %key, "plugin config value is a nested table or array; skipping");
+                    }
+                }
+            }
+            pairs.sort();
+            inner.insert(name.clone(), pairs);
+        }
+        Ok(Self { inner })
+    }
+
+    pub fn for_plugin(&self, name: &str) -> Vec<(String, String)> {
+        self.inner.get(name).cloned().unwrap_or_default()
+    }
+}
+
 /// Per-plugin grant table parsed from `--plugin-grants`.
 ///
 /// Format: `<plugin>=<cap>[,<cap>...]` pairs separated by `;`.
@@ -436,6 +500,7 @@ pub struct PluginHost {
     engine: Engine,
     plugins: Arc<Mutex<Vec<Plugin>>>,
     grants: Arc<GrantTable>,
+    configs: Arc<PluginConfigs>,
     http: reqwest::Client,
     s3: Option<aws_sdk_s3::Client>,
     state_dir: Option<PathBuf>,
@@ -459,10 +524,18 @@ impl PluginHost {
             engine,
             plugins: Arc::new(Mutex::new(Vec::new())),
             grants: Arc::new(grants),
+            configs: Arc::new(PluginConfigs::empty()),
             http,
             s3: None,
             state_dir: None,
         })
+    }
+
+    /// Attach a per-plugin config table parsed from
+    /// `--plugin-config`. Replaces the empty default.
+    pub fn with_configs(mut self, configs: PluginConfigs) -> Self {
+        self.configs = Arc::new(configs);
+        self
     }
 
     /// Attach an S3 client. Required when any plugin in the grant
@@ -621,7 +694,12 @@ impl PluginHost {
             let cfg = WitConfig {
                 name: plugin.name.clone(),
                 version: String::new(),
-                config: Vec::new(),
+                config: self
+                    .configs
+                    .for_plugin(&plugin.name)
+                    .into_iter()
+                    .map(|(name, value)| WitHeader { name, value })
+                    .collect(),
             };
             match inst
                 .mica_plugin_lifecycle()
@@ -1072,6 +1150,68 @@ mod tests {
         assert!(g.any_has(Capability::State));
         let empty = GrantTable::parse("");
         assert!(!empty.any_has(Capability::HttpClient));
+    }
+
+    #[test]
+    fn plugin_configs_empty_path_yields_empty() {
+        let c = PluginConfigs::load("").unwrap();
+        assert!(c.for_plugin("anyone").is_empty());
+    }
+
+    #[test]
+    fn plugin_configs_parses_scalars() {
+        let toml = r#"
+[plugins.gcs]
+bucket = "mica-prod-artifacts"
+prefix = "videos/"
+retries = 3
+ratio = 1.5
+strict = true
+"#;
+        let c = PluginConfigs::parse(toml).unwrap();
+        let pairs = c.for_plugin("gcs");
+        assert_eq!(pairs.len(), 5);
+        // Pairs are sorted by key.
+        let map: HashMap<_, _> = pairs.into_iter().collect();
+        assert_eq!(map.get("bucket").unwrap(), "mica-prod-artifacts");
+        assert_eq!(map.get("prefix").unwrap(), "videos/");
+        assert_eq!(map.get("retries").unwrap(), "3");
+        assert_eq!(map.get("ratio").unwrap(), "1.5");
+        assert_eq!(map.get("strict").unwrap(), "true");
+    }
+
+    #[test]
+    fn plugin_configs_skips_nested_tables() {
+        let toml = r#"
+[plugins.p]
+ok = "yes"
+[plugins.p.nested]
+bad = "skipped"
+"#;
+        let c = PluginConfigs::parse(toml).unwrap();
+        let pairs = c.for_plugin("p");
+        // 'nested' is parsed as a sub-table by toml, not as the
+        // string-valued key "nested" — it shows up as a table-typed
+        // entry on the parent and is rejected by our scalar-only
+        // policy. So the only surviving entry is `ok`.
+        let keys: Vec<&str> = pairs.iter().map(|(k, _)| k.as_str()).collect();
+        assert!(keys.contains(&"ok"));
+        assert!(!keys.contains(&"bad"));
+    }
+
+    #[test]
+    fn plugin_configs_missing_plugins_table_is_empty() {
+        let toml = r#"
+unrelated = "foo"
+"#;
+        let c = PluginConfigs::parse(toml).unwrap();
+        assert!(c.for_plugin("anyone").is_empty());
+    }
+
+    #[test]
+    fn plugin_configs_invalid_toml_returns_err() {
+        let err = PluginConfigs::parse("plugins. = =");
+        assert!(err.is_err());
     }
 
     #[tokio::test]

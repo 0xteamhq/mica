@@ -56,6 +56,7 @@ fn args_with(timeout_ms: u64, retry_count: u32) -> Args {
         plugin_state_dir: String::new(),
         plugin_on_create_timeout: Duration::from_secs(5),
         plugin_shutdown_timeout: Duration::from_secs(5),
+        plugin_config: String::new(),
     }
 }
 
