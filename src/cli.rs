@@ -190,6 +190,13 @@ pub struct Args {
     #[arg(long, default_value = "", env = "MICA_PLUGIN_CONFIG")]
     pub plugin_config: String,
 
+    /// Per-call timeout applied to each plugin's
+    /// `http.intercept_request` and `http.intercept_response`. This
+    /// is the proxy hot path; a slow plugin would block every
+    /// WebDriver action, so the budget is small by default.
+    #[arg(long, default_value = "500ms", value_parser = parse_duration)]
+    pub plugin_http_timeout: Duration,
+
     /// htpasswd file gating every WebDriver / VNC / artifact / relay
     /// endpoint with HTTP Basic auth. Empty = open. Reloaded on
     /// SIGHUP alongside browsers.json. Health (/healthz, /readyz),

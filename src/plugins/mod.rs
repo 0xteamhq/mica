@@ -183,6 +183,7 @@ mod bindings {
 
 use bindings::Plugin as PluginInstance;
 use bindings::exports::mica::plugin::artifact::UploadDestination;
+use bindings::exports::mica::plugin::http::{RequestAction, ResponseAction};
 use bindings::exports::mica::plugin::lifecycle::Config as WitConfig;
 use bindings::exports::mica::plugin::session::CapabilitiesDecision;
 use bindings::mica::plugin::host_log::Level as HostLogLevel;
@@ -191,6 +192,19 @@ use bindings::mica::plugin::types::{
     Header as WitHeader, HttpRequest as WitHttpRequest, HttpResponse as WitHttpResponse,
     Instant as WitInstant, PluginError as WitPluginError,
 };
+
+/// Resolution of the `http.intercept-request` plugin chain.
+#[derive(Debug, Clone)]
+pub enum RequestVerdict {
+    /// Forward this (possibly mutated) request upstream.
+    Forward(WitHttpRequest),
+    /// Don't forward — respond directly with this synthetic response.
+    Short(WitHttpResponse),
+}
+
+pub use bindings::mica::plugin::types::Header as PluginHeader;
+pub use bindings::mica::plugin::types::HttpRequest as PluginHttpRequest;
+pub use bindings::mica::plugin::types::HttpResponse as PluginHttpResponse;
 
 /// Resolution of the `session.on-create` plugin chain.
 ///
@@ -934,6 +948,134 @@ impl PluginHost {
                 }
             }
         }
+    }
+
+    /// Run the `http.intercept-request` plugin chain. Each plugin
+    /// sees the previous plugin's mutated request; first
+    /// `short-circuit` wins. `per_plugin_timeout` bounds each call.
+    /// Errors / wasm traps / timeouts are treated as `pass` (the
+    /// chain continues with the same request) so a misbehaving
+    /// plugin can't strand the proxy hot path.
+    pub async fn intercept_request(
+        &self,
+        req: WitHttpRequest,
+        per_plugin_timeout: Duration,
+    ) -> RequestVerdict {
+        let plugins = self.plugins.lock().await;
+        if plugins.is_empty() {
+            return RequestVerdict::Forward(req);
+        }
+        let mut current = req;
+        for plugin in plugins.iter() {
+            let linker = match self.build_linker_for(&plugin.name) {
+                Ok(l) => l,
+                Err(err) => {
+                    tracing::warn!(plugin = %plugin.name, error = %err, "linker setup failed; skipping intercept_request");
+                    continue;
+                }
+            };
+            let mut store = self.fresh_store(&plugin.name);
+            let inst = match PluginInstance::instantiate_async(
+                &mut store,
+                &plugin.component,
+                &linker,
+            )
+            .await
+            {
+                Ok(i) => i,
+                Err(err) => {
+                    tracing::warn!(plugin = %plugin.name, error = %err, "plugin instantiate failed during intercept_request");
+                    continue;
+                }
+            };
+            let call = inst
+                .mica_plugin_http()
+                .call_intercept_request(&mut store, &current);
+            match tokio::time::timeout(per_plugin_timeout, call).await {
+                Ok(Ok(Ok(RequestAction::Pass))) => {
+                    // unchanged, continue with same `current`
+                }
+                Ok(Ok(Ok(RequestAction::Modify(new_req)))) => {
+                    current = new_req;
+                }
+                Ok(Ok(Ok(RequestAction::ShortCircuit(resp)))) => {
+                    tracing::info!(plugin = %plugin.name, status = resp.status, path = %current.path, "plugin short-circuited request");
+                    return RequestVerdict::Short(resp);
+                }
+                Ok(Ok(Err(err))) => {
+                    tracing::warn!(plugin = %plugin.name, code = %err.code, message = %err.message, "plugin intercept_request error; treating as pass");
+                }
+                Ok(Err(err)) => {
+                    tracing::warn!(plugin = %plugin.name, error = %err, "plugin intercept_request wasm trap; treating as pass");
+                }
+                Err(_) => {
+                    tracing::warn!(plugin = %plugin.name, timeout_ms = per_plugin_timeout.as_millis() as u64, "plugin intercept_request timed out; treating as pass");
+                }
+            }
+        }
+        RequestVerdict::Forward(current)
+    }
+
+    /// Run the `http.intercept-response` plugin chain. Each plugin
+    /// sees the previous plugin's mutated response; there is no
+    /// short-circuit on the response side (the WIT contract has
+    /// `pass` and `modify` only). Errors / wasm traps / timeouts
+    /// fall through unchanged.
+    pub async fn intercept_response(
+        &self,
+        req: &WitHttpRequest,
+        resp: WitHttpResponse,
+        per_plugin_timeout: Duration,
+    ) -> WitHttpResponse {
+        let plugins = self.plugins.lock().await;
+        if plugins.is_empty() {
+            return resp;
+        }
+        let mut current = resp;
+        for plugin in plugins.iter() {
+            let linker = match self.build_linker_for(&plugin.name) {
+                Ok(l) => l,
+                Err(err) => {
+                    tracing::warn!(plugin = %plugin.name, error = %err, "linker setup failed; skipping intercept_response");
+                    continue;
+                }
+            };
+            let mut store = self.fresh_store(&plugin.name);
+            let inst = match PluginInstance::instantiate_async(
+                &mut store,
+                &plugin.component,
+                &linker,
+            )
+            .await
+            {
+                Ok(i) => i,
+                Err(err) => {
+                    tracing::warn!(plugin = %plugin.name, error = %err, "plugin instantiate failed during intercept_response");
+                    continue;
+                }
+            };
+            let call = inst
+                .mica_plugin_http()
+                .call_intercept_response(&mut store, req, &current);
+            match tokio::time::timeout(per_plugin_timeout, call).await {
+                Ok(Ok(Ok(ResponseAction::Pass))) => {
+                    // unchanged
+                }
+                Ok(Ok(Ok(ResponseAction::Modify(new_resp)))) => {
+                    current = new_resp;
+                }
+                Ok(Ok(Err(err))) => {
+                    tracing::warn!(plugin = %plugin.name, code = %err.code, message = %err.message, "plugin intercept_response error; treating as pass");
+                }
+                Ok(Err(err)) => {
+                    tracing::warn!(plugin = %plugin.name, error = %err, "plugin intercept_response wasm trap; treating as pass");
+                }
+                Err(_) => {
+                    tracing::warn!(plugin = %plugin.name, timeout_ms = per_plugin_timeout.as_millis() as u64, "plugin intercept_response timed out; treating as pass");
+                }
+            }
+        }
+        current
     }
 
     /// Run the plugin chain over a `FileCreated` and resolve to an
