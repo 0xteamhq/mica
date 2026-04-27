@@ -286,15 +286,29 @@ async fn create_session_inner(
             }
             // T43 — SessionStopped goes out last so listeners that
             // upload artifacts can rely on FileCreated having fired.
+            let finished = SystemTime::now();
             events
                 .emit_session(SessionStopped {
-                    session_id: sid,
+                    session_id: sid.clone(),
                     started: session_started,
-                    finished: SystemTime::now(),
-                    browser: Some(browser),
-                    browser_version: Some(version),
+                    finished,
+                    browser: Some(browser.clone()),
+                    browser_version: Some(version.clone()),
                 })
                 .await;
+            // session.on-end notification — best-effort fan-out to
+            // every plugin. Already inside a tokio::spawn so a slow
+            // plugin can't stall the cancel hook.
+            if let Some(host) = plugins_for_cancel.as_ref() {
+                host.dispatch_session_end(
+                    &sid,
+                    session_started,
+                    finished,
+                    Some(browser),
+                    Some(version),
+                )
+                .await;
+            }
         });
     });
 

@@ -722,6 +722,95 @@ impl PluginHost {
         }
     }
 
+    /// Fan a session-end notification out to every plugin's
+    /// `session.on-end`. Best-effort: WIT errors and wasm traps are
+    /// logged at WARN; mica does NOT retry. Each plugin runs in its
+    /// own fresh `Store` so a slow plugin can't observe peers.
+    ///
+    /// Per-plugin invocation is bounded by 5 s of host time so a
+    /// hung plugin can't keep mica's tokio task busy. Total
+    /// fan-out runs in series under the same overall budget.
+    pub async fn dispatch_session_end(
+        &self,
+        session_id: &str,
+        started: SystemTime,
+        finished: SystemTime,
+        browser: Option<String>,
+        browser_version: Option<String>,
+    ) {
+        let plugins = self.plugins.lock().await;
+        if plugins.is_empty() {
+            return;
+        }
+        let started_inst = match started.duration_since(UNIX_EPOCH) {
+            Ok(d) => WitInstant {
+                seconds: d.as_secs(),
+                nanos: d.subsec_nanos(),
+            },
+            Err(_) => WitInstant {
+                seconds: 0,
+                nanos: 0,
+            },
+        };
+        let finished_inst = match finished.duration_since(UNIX_EPOCH) {
+            Ok(d) => WitInstant {
+                seconds: d.as_secs(),
+                nanos: d.subsec_nanos(),
+            },
+            Err(_) => WitInstant {
+                seconds: 0,
+                nanos: 0,
+            },
+        };
+        let info = bindings::mica::plugin::types::SessionInfo {
+            session_id: session_id.to_string(),
+            started: started_inst,
+            finished: finished_inst,
+            browser,
+            browser_version,
+        };
+        for plugin in plugins.iter() {
+            let linker = match self.build_linker_for(&plugin.name) {
+                Ok(l) => l,
+                Err(err) => {
+                    tracing::warn!(plugin = %plugin.name, error = %err, "linker setup failed; skipping on_end");
+                    continue;
+                }
+            };
+            let mut store = self.fresh_store(&plugin.name);
+            let inst = match PluginInstance::instantiate_async(
+                &mut store,
+                &plugin.component,
+                &linker,
+            )
+            .await
+            {
+                Ok(i) => i,
+                Err(err) => {
+                    tracing::warn!(plugin = %plugin.name, error = %err, "plugin instantiate failed during on_end");
+                    continue;
+                }
+            };
+            // Per-plugin 5 s budget. Hung plugin can't keep this
+            // tokio::spawn alive forever.
+            let call = inst.mica_plugin_session().call_on_end(&mut store, &info);
+            match tokio::time::timeout(Duration::from_secs(5), call).await {
+                Ok(Ok(Ok(()))) => {
+                    tracing::debug!(plugin = %plugin.name, %session_id, "plugin session.on_end ok");
+                }
+                Ok(Ok(Err(err))) => {
+                    tracing::warn!(plugin = %plugin.name, code = %err.code, message = %err.message, "plugin session.on_end returned error");
+                }
+                Ok(Err(err)) => {
+                    tracing::warn!(plugin = %plugin.name, error = %err, "plugin session.on_end wasm trap");
+                }
+                Err(_) => {
+                    tracing::warn!(plugin = %plugin.name, %session_id, "plugin session.on_end timed out");
+                }
+            }
+        }
+    }
+
     /// Run the plugin chain over a `FileCreated` and resolve to an
     /// `ArtifactVerdict`. Plugins are called in load order; first
     /// non-`Keep` wins. Errors / wasm traps in a plugin are treated
@@ -936,6 +1025,19 @@ mod tests {
         assert!(g.any_has(Capability::State));
         let empty = GrantTable::parse("");
         assert!(!empty.any_has(Capability::HttpClient));
+    }
+
+    #[tokio::test]
+    async fn dispatch_session_end_on_empty_host_is_noop() {
+        let host = PluginHost::new().expect("engine");
+        host.dispatch_session_end(
+            "sid",
+            SystemTime::UNIX_EPOCH,
+            SystemTime::UNIX_EPOCH,
+            Some("chrome".into()),
+            Some("126.0".into()),
+        )
+        .await;
     }
 
     #[tokio::test]
