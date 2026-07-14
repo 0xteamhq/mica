@@ -50,6 +50,14 @@ kube = { version = "0.96", features = ["runtime", "client"] }
 k8s-openapi = { version = "0.23", features = ["latest"] }
 wasmtime = { version = "26", features = ["component-model"] }
 wasmtime-wasi = "26"
+tokio-stream = { version = "0.1", features = ["sync"] }
+rust-embed = { version = "8", optional = true, features = ["mime-guess"] }
+
+[features]
+# Embed the ui/dist React build into the binary (requires `npm run
+# build --prefix ui` first). Off by default so `cargo test --all`
+# works without a Node toolchain.
+ui = ["dep:rust-embed"]
 
 [dev-dependencies]
 bcrypt = "0.16"

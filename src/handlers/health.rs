@@ -22,6 +22,11 @@ pub async fn healthz() -> &'static str {
 }
 
 pub async fn readyz(State(state): State<AppState>) -> Response {
+    // Draining (manual or shutdown-initiated) wins over queue math:
+    // routers and Ingress must stop sending new sessions here.
+    if state.draining.load(std::sync::atomic::Ordering::Relaxed) {
+        return (StatusCode::SERVICE_UNAVAILABLE, "draining").into_response();
+    }
     // Queue full = used == capacity AND no pending. We accept new
     // requests as long as the queue can buffer them, so "ready" is
     // really "can we make forward progress?" — only fail when the

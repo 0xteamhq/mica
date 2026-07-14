@@ -12,6 +12,10 @@ pub struct StatusResponse {
     pub used: usize,
     pub queued: usize,
     pub pending: usize,
+    /// Wire addition (M2, additive): node refuses new sessions while
+    /// draining. Consumed by the router health poller and dashboards;
+    /// pre-M2 clients that don't know the key are unaffected.
+    pub draining: bool,
     pub browsers: BTreeMap<String, Vec<String>>,
     pub sessions: Vec<SessionEntry>,
 }
@@ -48,6 +52,7 @@ pub async fn status(State(state): State<AppState>) -> Json<StatusResponse> {
         used: state.queue.used(),
         queued: state.queue.queued(),
         pending: state.queue.pending(),
+        draining: state.draining.load(std::sync::atomic::Ordering::Relaxed),
         browsers,
         sessions,
     })

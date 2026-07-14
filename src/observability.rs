@@ -31,4 +31,11 @@ pub mod names {
     pub const QUEUE_QUEUED: &str = "mica_queue_queued";
     pub const QUEUE_CAPACITY: &str = "mica_queue_capacity";
     pub const SESSIONS_ACTIVE: &str = "mica_sessions_active";
+    // Router mode (M4). `node` label = node name from nodes.json —
+    // bounded by the registry, so low-cardinality.
+    pub const ROUTER_NODE_UP: &str = "mica_router_node_up";
+    pub const ROUTER_CREATES_TOTAL: &str = "mica_router_creates_total";
+    pub const ROUTER_FAILOVERS_TOTAL: &str = "mica_router_failovers_total";
+    pub const ROUTER_PROXY_REQUESTS_TOTAL: &str = "mica_router_proxy_requests_total";
+    pub const ROUTER_HEALTH_POLL_FAILURES_TOTAL: &str = "mica_router_health_poll_failures_total";
 }

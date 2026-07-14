@@ -20,13 +20,20 @@ cargo test --test <name> -- <pattern>                       # single test file /
 # Docker integration tests — gated by env var, marked #[ignore]
 MICA_DOCKER_TESTS=1 cargo test --test docker_integration -- --ignored
 
+# Admin dashboard (ui/ — React+Vite, embedded via rust-embed).
+# The `ui` cargo feature is OFF by default so cargo test needs no Node.
+npm ci --prefix ui && npm run build --prefix ui             # produces ui/dist
+cargo build --features ui                                   # embeds ui/dist at /admin
+npm run dev --prefix ui                                     # UI dev server, proxies to :4444
+
 # Pre-commit (uses prek, NOT classic pre-commit)
 brew install prek                                           # or: cargo install prek
 prek install                                                # writes .git/hooks/pre-commit (one-time)
 prek run --all-files                                        # what CI runs
 
-# CI runs four jobs in parallel: prek (fmt + clippy + lint),
-# cargo test --all --locked, cargo build --release --locked, docker build.
+# CI runs five jobs in parallel: prek (fmt + clippy + lint),
+# cargo test --all --locked, admin UI build, cargo build --release
+# --locked --features ui (builds ui/dist first), docker build.
 # RUSTFLAGS=-D warnings is set globally in CI; clippy is -D warnings too.
 ```
 
@@ -75,6 +82,14 @@ Two extension points share the same WIT contract (`wit/`, package `mica:plugin@0
 
 Capability gating is fail-closed: a plugin importing a non-granted host capability fails to instantiate at startup.
 
+### Router mode (Phase 7)
+
+`mica --router --nodes nodes.json` runs the same binary as a stateless GGR-equivalent tier (`src/router/`). `main.rs` branches to `router::serve::run` **before** backend/isolation/wasmtime init. `RouterState` (registry + reqwest client) replaces `AppState` — no Queue, no SessionMap. Session ids returned to clients are `base64url(node_name).upstream_id` (`src/router/session_id.rs`) so any router replica routes any request statelessly. A background poller caches each node's `/status` for health + capability placement; aggregated `/status` is a strict superset of the node shape (`"router": true`, `nodes: [...]`). `deploy/routing/README.md` is the ops doc (nodes.json reference, drain runbook). The node-side `draining` flag (`AppState.draining`, `/readyz` 503, `/status.draining`) is what the router's placement respects.
+
+### Admin control plane (Phase 8)
+
+`/admin` serves a React/Vite SPA from `ui/dist`, embedded by rust-embed behind the off-by-default `ui` cargo feature (`src/handlers/admin/assets.rs`); feature-off builds serve a placeholder so route shape is identical. `/admin/api/*` (`src/handlers/admin/`): `state` (dashboard snapshot), `events` (SSE from the `AdminEvent` broadcast on EventBus + 2s stats frames), kill/drain/reload ops, raw-bytes browsers.json editing (file stays source of truth; never round-trip through serde — unknown fields would drop), users CRUD (htpasswd v2 `name:hash[:admin]`), quotas. Mutating routes take the `RequireAdmin` extractor (`src/auth.rs`); role comes from the htpasswd third column. Per-user quotas (`src/quota.rs`) are enforced in `create.rs` BEFORE `queue.acquire()` — the `QuotaGuard` rides in the same holder as the queue `Permit`. `src/reload.rs::reload_all` is the single reload path for SIGHUP and `POST /admin/api/config/reload`.
+
 ### Graceful shutdown
 
 `shutdown::signal_future()` resolves on SIGTERM / SIGINT. `axum::serve(...).with_graceful_shutdown(...)` stops accepting new connections; `shutdown::drain` walks `SessionMap` and removes every session, which fires each session's cancel hook (release queue permit, kill upstream container, emit `SessionStopped`). `--graceful-period` bounds the drain.
@@ -89,7 +104,8 @@ Capability gating is fail-closed: a plugin importing a non-granted host capabili
 | 4 | Isolation drivers — runc/gvisor/kata wired, firecracker/cloud_hypervisor scaffolded | partial |
 | 5 | WASM plugin host — WIT contract done (`wit/`), wasmtime host scaffolded (`src/plugins/`) | partial |
 | 6 | BiDi + streaming artifacts — `src/streaming/` traits defined, CDP/ffmpeg/S3-multipart wiring pending (0XT-82) | scaffold |
-| 7 | Aggregated /status (ggr-ui equivalent) | not started |
+| 7 | Router mode (`--router`, GGR equivalent) + aggregated /status (ggr-ui equivalent) — `src/router/` | done |
+| 8 | Admin control plane — `/admin` React dashboard (embedded, `--features ui`) + `/admin/api/*` (state, SSE events, kill/drain/reload, registry editing, users, quotas) — `src/handlers/admin/`, `ui/` | done |
 
 Comments like "Phase X" and ticket IDs (`P4.6`, `0XT-NN`, `T<n>`) reference Linear and the strategy doc — search there for context, not training data.
 
