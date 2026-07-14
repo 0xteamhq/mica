@@ -26,6 +26,33 @@ impl Config {
         Ok(Self { inner })
     }
 
+    /// Parse + semantically validate registry bytes (admin API PUT
+    /// shares this with nothing else — `load` stays permissive for
+    /// backward compat with hand-maintained files).
+    ///
+    /// Checks: every `default` exists in its `versions` map, and every
+    /// version's image resolves as a Docker image (string form).
+    pub fn validate_bytes(bytes: &[u8]) -> Result<Self, String> {
+        let inner: HashMap<String, Versions> =
+            serde_json::from_slice(bytes).map_err(|e| format!("json: {e}"))?;
+        for (name, versions) in &inner {
+            if !versions.versions.contains_key(&versions.default) {
+                return Err(format!(
+                    "browser {name:?}: default version {:?} not present in versions",
+                    versions.default
+                ));
+            }
+            for (ver, browser) in &versions.versions {
+                if browser.docker_image().is_none() {
+                    return Err(format!(
+                        "browser {name:?} version {ver:?}: image must be a string (driver-mode arrays are unsupported)"
+                    ));
+                }
+            }
+        }
+        Ok(Self { inner })
+    }
+
     /// Resolve `(browser_name, requested_version)` to a concrete
     /// `(Browser, version_string)`:
     ///

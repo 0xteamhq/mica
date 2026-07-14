@@ -32,10 +32,15 @@ impl SessionMap {
         }
     }
 
-    pub async fn remove(&self, id: &str) {
+    /// Returns `true` when the session existed and its teardown
+    /// (idle-watcher stop + cancel hook) was triggered.
+    pub async fn remove(&self, id: &str) -> bool {
         if let Some((_, s)) = self.inner.remove(id) {
             s.stop_idle();
             s.run_cancel();
+            true
+        } else {
+            false
         }
     }
 

@@ -20,14 +20,40 @@
 //! Reload on SIGHUP: the htpasswd file is re-read alongside
 //! browsers.json. The file is wrapped in `ArcSwap` so the hot path
 //! is lock-free.
+//!
+//! Roles (file format v2, wire-compatible with plain htpasswd): a row
+//! may carry a third colon-separated field, `admin`:
+//!
+//!   alice:$2y$05$...:admin      # admin — may hit mutating /admin/api
+//!   bob:$2y$05$...              # regular user
+//!
+//! Apache's `htpasswd -b` rewrites rows without the role column, so
+//! once roles are in use the file should be managed by mica (the M3
+//! users API) or by hand. A plaintext password that itself ends in
+//! `:admin` must be bcrypt-hashed to disambiguate.
 
 use arc_swap::ArcSwap;
 use axum::body::Body;
-use axum::http::{Request, Response, StatusCode};
+use axum::http::{Request, Response, StatusCode, request::Parts};
 use base64::Engine as _;
 use base64::engine::general_purpose;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+/// The authenticated identity, inserted into request extensions by
+/// `require_basic_auth` and read by handlers (session ownership,
+/// `RequireAdmin`). Absent when auth is disabled (open mode).
+#[derive(Debug, Clone)]
+pub struct AuthedUser {
+    pub name: String,
+    pub admin: bool,
+}
+
+#[derive(Debug, Clone)]
+struct UserEntry {
+    hash: String,
+    admin: bool,
+}
 
 /// Compiled htpasswd database. Empty map = no auth file configured →
 /// every request is allowed.
@@ -36,8 +62,9 @@ use std::sync::Arc;
 /// about the two hash flavors htpasswd shipped this decade: bcrypt
 /// (`$2y$` / `$2a$` / `$2b$` prefix) and plaintext. MD5/SHA1 rows
 /// aren't supported — operators on those should re-hash with bcrypt.
+#[derive(Clone)]
 pub struct AuthState {
-    users: HashMap<String, String>,
+    users: HashMap<String, UserEntry>,
 }
 
 impl AuthState {
@@ -61,8 +88,19 @@ impl AuthState {
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
-            if let Some((user, hash)) = line.split_once(':') {
-                users.insert(user.to_string(), hash.to_string());
+            if let Some((user, rest)) = line.split_once(':') {
+                // Optional trailing `:admin` role column (format v2).
+                let (hash, admin) = match rest.rsplit_once(':') {
+                    Some((h, "admin")) => (h, true),
+                    _ => (rest, false),
+                };
+                users.insert(
+                    user.to_string(),
+                    UserEntry {
+                        hash: hash.to_string(),
+                        admin,
+                    },
+                );
             }
         }
         Ok(Self { users })
@@ -73,16 +111,84 @@ impl AuthState {
         self.users.is_empty()
     }
 
-    /// Verify a `Basic <base64>` header value. Returns the username
-    /// on success.
-    pub fn check(&self, header_value: &str) -> Option<String> {
+    pub fn user_count(&self) -> usize {
+        self.users.len()
+    }
+
+    /// `(name, admin)` pairs sorted by name — the users API listing.
+    /// Hashes never leave this module.
+    pub fn entries(&self) -> Vec<(String, bool)> {
+        let mut v: Vec<_> = self
+            .users
+            .iter()
+            .map(|(n, e)| (n.clone(), e.admin))
+            .collect();
+        v.sort();
+        v
+    }
+
+    /// Insert or replace a user. `password_hash` is a bcrypt hash
+    /// (callers hash plaintext; this module never sees the password).
+    pub fn upsert(&mut self, name: &str, password_hash: String, admin: bool) {
+        self.users.insert(
+            name.to_string(),
+            UserEntry {
+                hash: password_hash,
+                admin,
+            },
+        );
+    }
+
+    /// Change a user's role keeping their hash. `false` when unknown.
+    pub fn set_admin(&mut self, name: &str, admin: bool) -> bool {
+        match self.users.get_mut(name) {
+            Some(e) => {
+                e.admin = admin;
+                true
+            }
+            None => false,
+        }
+    }
+
+    pub fn remove(&mut self, name: &str) -> bool {
+        self.users.remove(name).is_some()
+    }
+
+    pub fn contains(&self, name: &str) -> bool {
+        self.users.contains_key(name)
+    }
+
+    /// Serialize back to htpasswd format v2 (`name:hash[:admin]`),
+    /// sorted for deterministic files.
+    pub fn to_file_string(&self) -> String {
+        let mut rows: Vec<_> = self.users.iter().collect();
+        rows.sort_by(|a, b| a.0.cmp(b.0));
+        let mut out = String::new();
+        for (name, e) in rows {
+            out.push_str(name);
+            out.push(':');
+            out.push_str(&e.hash);
+            if e.admin {
+                out.push_str(":admin");
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    /// Verify a `Basic <base64>` header value. Returns the
+    /// authenticated identity on success.
+    pub fn check(&self, header_value: &str) -> Option<AuthedUser> {
         let token = header_value.strip_prefix("Basic ")?.trim();
         let decoded = general_purpose::STANDARD.decode(token).ok()?;
         let pair = std::str::from_utf8(&decoded).ok()?;
         let (user, pass) = pair.split_once(':')?;
         let stored = self.users.get(user)?;
-        if verify_password(pass, stored) {
-            Some(user.to_string())
+        if verify_password(pass, &stored.hash) {
+            Some(AuthedUser {
+                name: user.to_string(),
+                admin: stored.admin,
+            })
         } else {
             None
         }
@@ -144,8 +250,12 @@ pub async fn require_basic_auth(
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok());
     if let Some(h) = header
-        && let Some(_user) = auth_state.check(h)
+        && let Some(user) = auth_state.check(h)
     {
+        // Downstream consumers: session ownership attribution in
+        // create_session, RequireAdmin on mutating /admin/api routes.
+        let mut req = req;
+        req.extensions_mut().insert(user);
         return next.run(req).await;
     }
     Response::builder()
@@ -156,6 +266,25 @@ pub async fn require_basic_auth(
         )
         .body(Body::from("unauthorized"))
         .expect("build 401")
+}
+
+/// Extractor gating mutating admin endpoints.
+///
+/// Posture mirrors the Basic gate: when auth is disabled (no users
+/// file → no `AuthedUser` extension) everything is allowed; when auth
+/// is on, only rows with the `admin` role pass. Regular users get 403.
+pub struct RequireAdmin(pub Option<AuthedUser>);
+
+#[async_trait::async_trait]
+impl<S: Send + Sync> axum::extract::FromRequestParts<S> for RequireAdmin {
+    type Rejection = (StatusCode, &'static str);
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        match parts.extensions.get::<AuthedUser>() {
+            Some(u) if !u.admin => Err((StatusCode::FORBIDDEN, "admin role required")),
+            u => Ok(Self(u.cloned())),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -188,9 +317,36 @@ mod tests {
             "Basic {}",
             general_purpose::STANDARD.encode(b"alice:s3cret")
         );
-        assert_eq!(s.check(&header), Some("alice".to_string()));
+        let user = s.check(&header).expect("valid creds");
+        assert_eq!(user.name, "alice");
+        assert!(!user.admin, "no role column means regular user");
         let bad = format!("Basic {}", general_purpose::STANDARD.encode(b"alice:wrong"));
         assert!(s.check(&bad).is_none());
+    }
+
+    #[test]
+    fn admin_role_column() {
+        let h = bcrypt::hash("s3cret", 4).expect("bcrypt");
+        let f = write_temp(&format!("root:{h}:admin\nalice:{h}\n"));
+        let s = AuthState::load(f.path().to_str().unwrap()).unwrap();
+        let header = |pair: &str| {
+            format!(
+                "Basic {}",
+                general_purpose::STANDARD.encode(pair.as_bytes())
+            )
+        };
+        assert!(s.check(&header("root:s3cret")).expect("root ok").admin);
+        assert!(!s.check(&header("alice:s3cret")).expect("alice ok").admin);
+    }
+
+    #[test]
+    fn plaintext_with_colon_still_verifies() {
+        // The role column only strips a literal trailing ":admin";
+        // other colons stay part of the plaintext password.
+        let f = write_temp("dev:pa:ss\n");
+        let s = AuthState::load(f.path().to_str().unwrap()).unwrap();
+        let header = format!("Basic {}", general_purpose::STANDARD.encode(b"dev:pa:ss"));
+        assert_eq!(s.check(&header).expect("ok").name, "dev");
     }
 
     #[test]

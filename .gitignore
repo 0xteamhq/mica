@@ -4,3 +4,8 @@
 *.swp
 .env
 .env.local
+
+
+**/dist
+**/node_modules
+*.tsbuildinfo

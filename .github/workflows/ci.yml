@@ -33,6 +33,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all --locked
 
+  ui:
+    name: admin UI build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci --prefix ui
+      - run: npm run build --prefix ui
+
   build:
     name: cargo build --release
     runs-on: ubuntu-latest
@@ -40,7 +53,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --locked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      # Release binary embeds the admin dashboard (rust-embed needs
+      # ui/dist to exist before cargo runs).
+      - run: npm ci --prefix ui && npm run build --prefix ui
+      - run: cargo build --release --locked --features ui
 
   docker:
     name: docker build

@@ -1,5 +1,16 @@
 # syntax=docker/dockerfile:1.7
 
+# ---- admin UI ----
+# Built first so the rust builder can embed ui/dist via rust-embed
+# (`--features ui`). package*.json copied alone to keep the npm ci
+# layer cached across UI source changes.
+FROM node:22-bookworm-slim AS ui
+WORKDIR /ui
+COPY ui/package.json ui/package-lock.json ./
+RUN npm ci
+COPY ui ./
+RUN npm run build
+
 # ---- builder ----
 # We stay on the dynamic-cc image because reqwest/bollard pull native-tls
 # (libssl). M12 T52 originally targeted musl-static + distroless/static,
@@ -21,8 +32,10 @@ COPY src ./src
 COPY wit ./wit
 # include_str!()'d at compile time by src/handlers/openapi.rs.
 COPY deploy/openapi ./deploy/openapi
+# Embedded by rust-embed in src/handlers/admin/assets.rs (feature "ui").
+COPY --from=ui /ui/dist ./ui/dist
 
-RUN cargo build --release --locked
+RUN cargo build --release --locked --features ui
 RUN strip target/release/mica
 
 # ---- runtime ----

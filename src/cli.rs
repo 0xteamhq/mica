@@ -205,4 +205,53 @@ pub struct Args {
     /// scrapers don't need credentials.
     #[arg(long, default_value = "", env = "MICA_USERS")]
     pub users: String,
+
+    /// Per-user session quota file (M3), JSON:
+    /// `{"default": 0, "users": {"alice": 3}}` — 0 = unlimited.
+    /// Checked before the global queue so an over-quota create fails
+    /// fast without burning a slot. Empty = quotas disabled. Reloaded
+    /// on SIGHUP and editable via PUT /admin/api/quotas. Applies only
+    /// to authenticated sessions (open mode has no owner to meter).
+    #[arg(long, default_value = "", env = "MICA_QUOTAS")]
+    pub quotas: String,
+
+    /// Run as a stateless router (GGR equivalent) in front of N mica
+    /// nodes instead of a grid node. Requires --nodes. Backend and
+    /// isolation flags are ignored; docker/k8s are never touched.
+    /// Session ids returned to clients embed the node name
+    /// (`base64url(name).upstream_id`) so any router replica can
+    /// route any request without shared state.
+    #[arg(long, default_value_t = false, env = "MICA_ROUTER")]
+    pub router: bool,
+
+    /// Node registry for router mode (nodes.json). Hot-reloaded on
+    /// SIGHUP. Unreadable/invalid at startup is a hard error — a
+    /// router with no nodes serves nothing.
+    #[arg(long, default_value = "config/nodes.json", env = "MICA_NODES")]
+    pub nodes: String,
+
+    /// How often the router polls each node's /status for health +
+    /// capability data (router mode).
+    #[arg(long, default_value = "5s", value_parser = parse_duration, env = "MICA_ROUTER_HEALTH_INTERVAL")]
+    pub router_health_interval: Duration,
+
+    /// Per-poll timeout for a node /status request (router mode).
+    #[arg(long, default_value = "5s", value_parser = parse_duration, env = "MICA_ROUTER_HEALTH_TIMEOUT")]
+    pub router_health_timeout: Duration,
+
+    /// Consecutive failed polls before a node is marked unhealthy and
+    /// excluded from new-session placement (router mode). Existing
+    /// sessions are still proxied to it.
+    #[arg(long, default_value_t = 2, env = "MICA_ROUTER_UNHEALTHY_THRESHOLD")]
+    pub router_unhealthy_threshold: u32,
+
+    /// Max distinct nodes tried per create-session request before
+    /// giving up (router mode).
+    #[arg(long, default_value_t = 3, env = "MICA_ROUTER_MAX_ATTEMPTS")]
+    pub router_max_attempts: u32,
+
+    /// Per-attempt timeout for a forwarded create (router mode).
+    /// Deliberately long: the node may queue the request.
+    #[arg(long, default_value = "5m", value_parser = parse_duration, env = "MICA_ROUTER_CREATE_TIMEOUT")]
+    pub router_create_timeout: Duration,
 }

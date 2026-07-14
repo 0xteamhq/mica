@@ -29,6 +29,11 @@ struct SessionInner {
     host_ports: HostPorts,
     browser_name: String,
     browser_version: String,
+    /// Authenticated user who created the session (None when auth is
+    /// disabled). Shown on /admin/api/state, deliberately NOT on
+    /// /status — every authenticated user can read /status and the
+    /// user↔session mapping shouldn't leak there.
+    owner: Option<String>,
     last_seen: Mutex<Instant>,
     idle_timeout: Duration,
     on_idle: Option<IdleCallback>,
@@ -85,6 +90,7 @@ impl Session {
         host_ports: HostPorts,
         browser_name: impl Into<String>,
         browser_version: impl Into<String>,
+        owner: Option<String>,
         idle: Duration,
         on_idle: IdleCallback,
         cancel: CancelCallback,
@@ -95,6 +101,7 @@ impl Session {
             host_ports,
             browser_name: browser_name.into(),
             browser_version: browser_version.into(),
+            owner,
             last_seen: Mutex::new(Instant::now()),
             idle_timeout: idle,
             on_idle: Some(on_idle),
@@ -120,6 +127,7 @@ impl Session {
             host_ports: HostPorts::default(),
             browser_name: String::new(),
             browser_version: String::new(),
+            owner: None,
             last_seen: Mutex::new(Instant::now()),
             idle_timeout: idle,
             on_idle,
@@ -143,6 +151,9 @@ impl Session {
     }
     pub fn browser_version(&self) -> &str {
         &self.0.browser_version
+    }
+    pub fn owner(&self) -> Option<&str> {
+        self.0.owner.as_deref()
     }
     pub fn started(&self) -> std::time::SystemTime {
         self.0.started

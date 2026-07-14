@@ -5,9 +5,12 @@
 //!   GET  /ping                                  -> M1 ping
 //!   POST /wd/hub/session                        -> M8 create
 //!   GET/POST/PUT/DELETE /wd/hub/session/{id}/*  -> M8 proxy / delete
+//!   GET  /admin[/*]                             -> embedded dashboard SPA
+//!   GET  /admin/api/*                           -> admin control plane
 //!
 //! M9 will add /status, /vnc/{id}, /video, /logs, and the relay group.
 
+pub mod admin;
 pub mod artifacts;
 pub mod bidi;
 pub mod create;
@@ -52,6 +55,11 @@ pub fn router(state: AppState) -> Router {
         // M9 T40 — log file server
         .route("/logs/:name", get(artifacts::get_log))
         .route("/logs/:name", delete(artifacts::delete_log))
+        // Admin control plane + embedded dashboard. Gated by the same
+        // Basic auth middleware as the rest of the API.
+        .nest("/admin/api", admin::api_router())
+        .route("/admin", get(admin::assets::index))
+        .route("/admin/*path", get(admin::assets::asset))
         // M9 T41 — relay group
         .route("/devtools/:session_id", any(relay::devtools_root))
         .route("/devtools/:session_id/*tail", any(relay::devtools))

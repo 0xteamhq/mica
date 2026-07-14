@@ -4,16 +4,19 @@
 //! (Isolation drivers) swap `backend` and `events` here without
 //! touching handlers.
 
+use crate::auth::{AuthState, AuthSwap};
 use crate::backend::Backend;
 use crate::cli::Args;
 use crate::config::Config;
 use crate::events::EventBus;
 use crate::plugins::PluginHost;
 use crate::queue::Queue;
+use crate::quota::QuotaTable;
 use crate::session::SessionMap;
 use arc_swap::ArcSwap;
 use metrics_exporter_prometheus::PrometheusHandle;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -36,6 +39,21 @@ pub struct AppState {
     /// event onto `events`, so a plugin returning `Skip` / `S3` /
     /// `CustomUri` short-circuits the built-in `S3Uploader`.
     pub plugins: Option<Arc<PluginHost>>,
+    /// Node is draining: set by graceful shutdown and by
+    /// POST /admin/api/drain. Surfaced on /readyz, /status and the
+    /// admin API; create_session rejects while set.
+    pub draining: Arc<AtomicBool>,
+    /// Hot-swappable htpasswd auth state. Shared with the
+    /// `require_basic_auth` middleware so API-triggered reloads
+    /// (POST /admin/api/config/reload) and the M3 users API can store
+    /// new state that the gate picks up immediately.
+    pub auth: AuthSwap,
+    /// Per-user session quotas (M3). Default = disabled (unlimited).
+    pub quotas: QuotaTable,
+    /// Serializes admin-API writes to operator files (browsers.json,
+    /// htpasswd, quotas) so concurrent PUTs can't interleave the
+    /// tmp-file + rename dance.
+    pub file_write_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl AppState {
@@ -56,7 +74,25 @@ impl AppState {
             events: EventBus::new(),
             metrics: None,
             plugins: None,
+            draining: Arc::new(AtomicBool::new(false)),
+            auth: Arc::new(ArcSwap::from_pointee(AuthState::empty())),
+            quotas: QuotaTable::default(),
+            file_write_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
+    }
+
+    /// Install quota limits. `main.rs` calls this after loading
+    /// `--quotas`; tests set limits directly on `quotas`.
+    pub fn with_quotas(self, quotas: crate::quota::Quotas) -> Self {
+        self.quotas.store(quotas);
+        self
+    }
+
+    /// Share the auth swap that the Basic-auth middleware uses.
+    /// `main.rs` calls this so admin-API reloads reach the gate.
+    pub fn with_auth(mut self, auth: AuthSwap) -> Self {
+        self.auth = auth;
+        self
     }
 
     /// Attach a Prometheus handle. `main.rs` calls this after

@@ -21,6 +21,13 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().json().init();
     let args = Args::parse();
 
+    // Router mode (M4): stateless GGR-equivalent tier. Branches
+    // before isolation probing / backend construction so a router
+    // never touches docker.sock, kubeconfig, or wasmtime.
+    if args.router {
+        return mica::router::serve::run(args).await;
+    }
+
     let config = match Config::load(&args.conf) {
         Ok(c) => c,
         Err(e) => {
@@ -178,35 +185,6 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // T51: SIGHUP -> reload browsers.json. arc-swap lets us flip the
-    // Arc<Config> without holding any locks on the hot path.
-    #[cfg(unix)]
-    {
-        let conf_path = args.conf.clone();
-        let arc_swap = state.config_swap.clone();
-        tokio::spawn(async move {
-            use tokio::signal::unix::{SignalKind, signal};
-            let mut hup = match signal(SignalKind::hangup()) {
-                Ok(s) => s,
-                Err(e) => {
-                    tracing::warn!(error = %e, "SIGHUP handler unavailable");
-                    return;
-                }
-            };
-            while hup.recv().await.is_some() {
-                match Config::load(&conf_path) {
-                    Ok(c) => {
-                        arc_swap.store(Arc::new(c));
-                        tracing::info!(path = %conf_path, "browsers.json reloaded");
-                    }
-                    Err(e) => {
-                        tracing::warn!(error = %e, path = %conf_path, "reload failed; keeping previous config");
-                    }
-                }
-            }
-        });
-    }
-
     // T49: per-request span carrying request_id (X-Request-ID or a
     // generated UUID). Surfaces in logs alongside the [SESSION_CREATED]
     // line so all events for one request stream together.
@@ -230,27 +208,40 @@ async fn main() -> anyhow::Result<()> {
     if !args.users.is_empty() {
         tracing::info!(path = %args.users, "HTTP Basic auth enabled");
     }
-    // SIGHUP also reloads the htpasswd file alongside browsers.json.
+    // Share the swap with handlers (admin reload + M3 users API write
+    // into it; the middleware reads it).
+    let state = state.with_auth(auth.clone());
+
+    // Per-user session quotas (M3). Bad file is a startup error, same
+    // posture as --users.
+    let state = match mica::quota::Quotas::load(&args.quotas) {
+        Ok(q) => {
+            if !args.quotas.is_empty() {
+                tracing::info!(path = %args.quotas, rows = q.users.len(), "quotas enabled");
+            }
+            state.with_quotas(q)
+        }
+        Err(e) => anyhow::bail!("read --quotas {}: {e}", args.quotas),
+    };
+
+    // T51: SIGHUP -> reload browsers.json + htpasswd via the same code
+    // path as POST /admin/api/config/reload. A parse failure keeps the
+    // previous state.
     #[cfg(unix)]
     {
-        let users_path = args.users.clone();
-        let auth_for_reload = auth.clone();
+        let reload_state = state.clone();
         tokio::spawn(async move {
             use tokio::signal::unix::{SignalKind, signal};
-            if users_path.is_empty() {
-                return;
-            }
             let mut hup = match signal(SignalKind::hangup()) {
                 Ok(s) => s,
-                Err(_) => return,
+                Err(e) => {
+                    tracing::warn!(error = %e, "SIGHUP handler unavailable");
+                    return;
+                }
             };
             while hup.recv().await.is_some() {
-                match AuthState::load(&users_path) {
-                    Ok(s) => {
-                        auth_for_reload.store(Arc::new(s));
-                        tracing::info!(path = %users_path, "users file reloaded");
-                    }
-                    Err(e) => tracing::warn!(error = %e, "users reload failed"),
+                if let Err(e) = mica::reload::reload_all(&reload_state) {
+                    tracing::warn!(error = %e, "SIGHUP reload failed; keeping previous state");
                 }
             }
         });
@@ -280,6 +271,12 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             shutdown::signal_future().await;
+            // Flip draining first: /readyz goes 503 and create_session
+            // rejects, so routers/Ingress stop placing sessions here
+            // while the drain below runs.
+            serve_state
+                .draining
+                .store(true, std::sync::atomic::Ordering::Relaxed);
             tracing::info!(?graceful, "draining sessions");
             shutdown::drain(serve_state.sessions.clone(), graceful).await;
             tracing::info!("drain complete");

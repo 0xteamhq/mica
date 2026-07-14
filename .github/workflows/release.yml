@@ -28,10 +28,17 @@ jobs:
           mkdir -p .cargo
           printf '[target.aarch64-unknown-linux-gnu]\nlinker = "aarch64-linux-gnu-gcc"\n' >> .cargo/config.toml
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Build admin UI (embedded via --features ui)
+        run: npm ci --prefix ui && npm run build --prefix ui
       - name: Build
         env:
           TARGET: ${{ matrix.target }}
-        run: cargo build --release --locked --target "$TARGET"
+        run: cargo build --release --locked --target "$TARGET" --features ui
       - name: Package
         env:
           TARGET: ${{ matrix.target }}

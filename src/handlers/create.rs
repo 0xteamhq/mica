@@ -22,10 +22,11 @@
 //! returns an error), the guard's Drop spawns the Stopper so the
 //! container never leaks.
 
+use crate::auth::AuthedUser;
 use crate::backend::{StartParams, StartedSession, Stopper};
 use crate::caps::Caps;
 use crate::error::WdError;
-use crate::events::{ArtifactKind, FileCreated, SessionStopped};
+use crate::events::{AdminEvent, ArtifactKind, FileCreated, SessionStopped};
 use crate::observability::names::{
     SESSION_CREATE_DURATION_MS, SESSIONS_CREATED_TOTAL, SESSIONS_FAILED_TOTAL,
     SESSIONS_TEARDOWN_TOTAL,
@@ -42,6 +43,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
 const NO_WAIT_HEADER: &str = "x-mica-no-wait";
+
+/// What the session's cancel hook owns and releases on teardown:
+/// the queue slot and (for authenticated sessions) the user's quota
+/// unit. One take() drops both.
+type SlotHolder = Arc<std::sync::Mutex<Option<(Permit, Option<crate::quota::QuotaGuard>)>>>;
 
 /// Drop-guard around a Stopper. While active, dropping the guard
 /// spawns the stop in the background; calling `disarm()` first
@@ -72,11 +78,13 @@ impl Drop for StopperGuard {
 
 pub async fn create_session(
     state_ext: State<AppState>,
+    owner: Option<axum::Extension<AuthedUser>>,
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, WdError> {
     let started_at = Instant::now();
-    let result = create_session_inner(state_ext, headers, body).await;
+    let owner = owner.map(|axum::Extension(u)| u.name);
+    let result = create_session_inner(state_ext, owner, headers, body).await;
     let elapsed_ms = started_at.elapsed().as_secs_f64() * 1000.0;
     metrics::histogram!(SESSION_CREATE_DURATION_MS).record(elapsed_ms);
     match &result {
@@ -88,9 +96,15 @@ pub async fn create_session(
 
 async fn create_session_inner(
     State(state): State<AppState>,
+    owner: Option<String>,
     headers: HeaderMap,
     body: Value,
 ) -> Result<Json<Value>, WdError> {
+    // Draining (manual /admin/api/drain or graceful shutdown):
+    // existing sessions keep proxying, new ones are rejected.
+    if state.draining.load(std::sync::atomic::Ordering::Relaxed) {
+        return Err(WdError::session_not_created("node is draining"));
+    }
     let request_id = headers
         .get("x-request-id")
         .and_then(|h| h.to_str().ok())
@@ -122,6 +136,24 @@ async fn create_session_inner(
             }
         }
     }
+
+    // (1c) Per-user quota — checked BEFORE the queue so an over-quota
+    // request fails fast without burning a slot. Sessions without an
+    // owner (auth disabled) bypass quotas. The guard's Drop releases
+    // the unit; it rides in the permit holder below so its lifetime
+    // exactly matches the session's queue slot.
+    let quota_guard = match owner.as_deref() {
+        Some(user) => match state.quotas.try_acquire(user) {
+            Some(g) => Some(g),
+            None => {
+                let limit = state.quotas.snapshot().limit_for(user);
+                return Err(WdError::session_not_created(format!(
+                    "user quota exceeded ({limit} concurrent sessions)"
+                )));
+            }
+        },
+        None => None,
+    };
 
     // (2) Queue
     let no_wait = state.args.disable_queue
@@ -204,8 +236,10 @@ async fn create_session_inner(
     // so the permit moves from pending -> used; then own the permit
     // inside the closure so dropping the closure releases the slot.
     permit.promote();
-    let permit_holder: Arc<std::sync::Mutex<Option<Permit>>> =
-        Arc::new(std::sync::Mutex::new(Some(permit)));
+    // The quota guard shares the permit's lifetime: the cancel hook's
+    // take() drops both, releasing the queue slot and the user's
+    // quota unit together.
+    let permit_holder: SlotHolder = Arc::new(std::sync::Mutex::new(Some((permit, quota_guard))));
     let permit_for_cancel = permit_holder.clone();
     let http = state.http.clone();
     let upstream_for_cancel = upstream.clone();
@@ -296,6 +330,9 @@ async fn create_session_inner(
                     browser_version: Some(version.clone()),
                 })
                 .await;
+            events.emit_admin(AdminEvent::SessionStopped {
+                session_id: sid.clone(),
+            });
             // session.on-end notification — best-effort fan-out to
             // every plugin. Already inside a tokio::spawn so a slow
             // plugin can't stall the cancel hook.
@@ -338,13 +375,20 @@ async fn create_session_inner(
         host_ports,
         browser_name.clone(),
         version.clone(),
+        owner.clone(),
         effective_timeout,
         on_idle,
         cancel,
     );
     state.sessions.put(session).await;
 
-    // (8) [SESSION_CREATED] log line.
+    // (8) [SESSION_CREATED] log line + admin dashboard event.
+    state.events.emit_admin(AdminEvent::SessionCreated {
+        session_id: session_id.clone(),
+        browser: browser_name.clone(),
+        version: version.clone(),
+        owner,
+    });
     let elapsed_ms = started_at.elapsed().as_millis();
     tracing::info!(
         request_id = %request_id,
