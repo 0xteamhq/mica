@@ -48,7 +48,18 @@ pub async fn upsert(
     if state.args.users.is_empty() {
         return no_users_file();
     }
-    if name.is_empty() || name.contains(':') || name.contains('\n') {
+    // The name must survive a round-trip through the htpasswd file
+    // (auth.rs::load): reject `:`/newlines (field/row separators), a
+    // leading `#` (parsed as a comment row → user silently vanishes on
+    // reload), and any leading/trailing whitespace (trimmed on load →
+    // the live name would diverge from the file).
+    if name.is_empty()
+        || name.contains(':')
+        || name.contains('\n')
+        || name.contains('\r')
+        || name.starts_with('#')
+        || name.trim() != name
+    {
         return (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({ "error": "invalid user name" })),

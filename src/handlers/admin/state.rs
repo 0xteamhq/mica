@@ -4,6 +4,7 @@
 //! capability flags (vnc/devtools/logs), session ownership (M2), the
 //! draining flag, and the browser registry with default versions.
 
+use crate::auth::RequireAdmin;
 use crate::state::AppState;
 use axum::Json;
 use axum::extract::State;
@@ -48,7 +49,9 @@ pub struct SessionInfo {
     pub logs: bool,
 }
 
-pub async fn state(State(state): State<AppState>) -> Json<StateResponse> {
+// Admin-only: exposes per-session `owner`, the user↔session mapping
+// that is deliberately kept off /status (see session/mod.rs).
+pub async fn state(_admin: RequireAdmin, State(state): State<AppState>) -> Json<StateResponse> {
     let mut browsers: BTreeMap<String, BrowserInfo> = BTreeMap::new();
     let cfg = state.config();
     for (name, versions) in cfg.snapshot() {

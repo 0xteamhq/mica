@@ -1,19 +1,22 @@
 import type { Capacity } from "../api";
+import { Card } from "@/components/ui/card";
 
 export function CapacityTiles({ capacity }: { capacity: Capacity | null }) {
   const tiles: Array<{ label: string; value: number | string }> = [
-    { label: "capacity", value: capacity?.total ?? "–" },
-    { label: "in use", value: capacity?.used ?? "–" },
-    { label: "pending", value: capacity?.pending ?? "–" },
-    { label: "queued", value: capacity?.queued ?? "–" },
+    { label: "Capacity", value: capacity?.total ?? "–" },
+    { label: "In use", value: capacity?.used ?? "–" },
+    { label: "Pending", value: capacity?.pending ?? "–" },
+    { label: "Queued", value: capacity?.queued ?? "–" },
   ];
   return (
-    <div className="tiles">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {tiles.map((t) => (
-        <div className="tile" key={t.label}>
-          <div className="tile-value">{t.value}</div>
-          <div className="tile-label">{t.label}</div>
-        </div>
+        <Card key={t.label} className="gap-1 py-4">
+          <div className="px-4 text-3xl font-semibold tabular-nums">{t.value}</div>
+          <div className="text-muted-foreground px-4 text-xs font-medium tracking-wide uppercase">
+            {t.label}
+          </div>
+        </Card>
       ))}
     </div>
   );
