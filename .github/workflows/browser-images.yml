@@ -85,8 +85,10 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
-          # Full multi-arch when publishing; single-arch for dry-run builds.
-          platforms: ${{ env.DO_PUSH == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          # Publish the image's declared arches (some browsers ship amd64
+          # only — e.g. chrome-headless-shell has no linux-arm64 binary).
+          # Dry-run builds are always single-arch amd64 for speed.
+          platforms: ${{ env.DO_PUSH == 'true' && matrix.platforms || 'linux/amd64' }}
           build-args: |
             ${{ matrix.versionArg }}=${{ matrix.version }}
           push: ${{ env.DO_PUSH == 'true' }}
