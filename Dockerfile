@@ -15,6 +15,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+# `wasmtime::component::bindgen!({ path: "wit" })` in src/plugins/mod.rs
+# reads the WIT package at compile time — without it the build fails with
+# "could not find `mica` in `bindings`".
+COPY wit ./wit
 # include_str!()'d at compile time by src/handlers/openapi.rs.
 COPY deploy/openapi ./deploy/openapi
 

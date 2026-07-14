@@ -6,14 +6,20 @@ Minimal Chrome image for mica's warm pool. Built around Chrome for Testing's `ch
 
 ```bash
 docker buildx build \
-  --platform linux/amd64,linux/arm64 \
+  --platform linux/amd64 \
   --build-arg CHROME_VERSION=126.0.6478.182 \
   -t mica/chrome-headless-shell:126.0.6478.182 \
   -t mica/chrome-headless-shell:126 \
   docker/chrome-headless-shell/
 ```
 
-In CI we publish to `ghcr.io/0xteamhq/mica/chrome-headless-shell` via the release workflow once a tag is cut.
+> **amd64 only.** Chrome for Testing does not publish a `linux-arm64`
+> `chrome-headless-shell` binary, so this image is x86-64 only (the
+> `browser-images.json` entry pins `platforms: linux/amd64`).
+
+In CI it's built + pushed to `ghcr.io/0xteamhq/chrome-headless-shell` by the
+[`browser-images`](../../.github/workflows/browser-images.yml) workflow,
+driven by the root `browser-images.json` manifest.
 
 ## Use from mica
 
