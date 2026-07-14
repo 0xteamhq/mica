@@ -10,6 +10,7 @@
 //! A subscriber that lags the broadcast buffer receives a `reset`
 //! frame and is expected to refetch /admin/api/state.
 
+use crate::auth::RequireAdmin;
 use crate::events::AdminEvent;
 use crate::state::AppState;
 use axum::extract::State;
@@ -24,7 +25,9 @@ use tokio_stream::wrappers::{BroadcastStream, IntervalStream};
 
 const STATS_INTERVAL: Duration = Duration::from_secs(2);
 
+// Admin-only: session_created frames carry `owner` (see state.rs).
 pub async fn events(
+    _admin: RequireAdmin,
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let lifecycle = BroadcastStream::new(state.events.subscribe_admin()).map(|item| match item {

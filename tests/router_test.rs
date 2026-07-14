@@ -190,7 +190,10 @@ async fn create_fails_over_on_5xx_but_not_on_4xx() {
     let (_f2, state2, app2) = build_router(&cfg);
     poll(&state2).await;
     let (status, json) = post_create(&app2).await;
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR); // W3C session not created
+    // Verbatim passthrough: the node's status code AND its W3C error
+    // type/message survive, not masked as a 500 session-not-created.
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(json["value"]["error"].as_str().unwrap(), "invalid argument");
     assert!(
         json["value"]["message"]
             .as_str()

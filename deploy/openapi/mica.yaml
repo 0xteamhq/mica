@@ -335,12 +335,18 @@ components:
 
     StatusResponse:
       type: object
-      required: [total, used, queued, pending, browsers, sessions]
+      required: [total, used, queued, pending, draining, browsers, sessions]
       properties:
         total: { type: integer, minimum: 0 }
         used: { type: integer, minimum: 0 }
         queued: { type: integer, minimum: 0 }
         pending: { type: integer, minimum: 0 }
+        draining:
+          type: boolean
+          description: >-
+            True when the node is draining (SIGTERM received / admin
+            drain): /readyz returns 503 and the router stops placing new
+            sessions here. Consumed by the router health poller.
         browsers:
           type: object
           description: Browser name → list of available versions.

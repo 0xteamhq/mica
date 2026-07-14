@@ -1,9 +1,10 @@
 //! Admin control plane — `/admin` (embedded SPA) + `/admin/api/*`.
 //!
 //! M1 ships the read-only surface: a full dashboard snapshot and an
-//! SSE stream of lifecycle events. Both sit behind the same Basic
-//! auth gate as the rest of the API (`/admin*` is NOT in the auth
-//! open-path list).
+//! SSE stream of lifecycle events. `/admin*` is NOT in the auth
+//! open-path list, and both reads additionally require the `admin`
+//! role (`RequireAdmin`) because they expose per-session `owner` —
+//! the user↔session mapping kept off /status (see session/mod.rs).
 //!
 //! Wire contract (`/admin/api/*` JSON shapes) is internal to the
 //! bundled UI — it may change between minor versions, unlike /status.

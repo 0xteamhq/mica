@@ -36,11 +36,14 @@ pub async fn put(
     State(state): State<AppState>,
     Json(quotas): Json<Quotas>,
 ) -> Response {
+    // Hold the write lock across BOTH the file write and the in-memory
+    // store so concurrent PUTs can't persist file order A→B while
+    // applying memory order B→A (matches registry::put_browsers).
+    let _write = state.file_write_lock.lock().await;
     // Persist first when a file backs the quotas, so SIGHUP reload
     // and this API stay convergent.
     if !state.args.quotas.is_empty() {
         let bytes = serde_json::to_vec_pretty(&quotas).expect("quotas serialize");
-        let _write = state.file_write_lock.lock().await;
         if let Err(e) = super::registry::write_atomic(&state.args.quotas, &bytes).await {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
