@@ -1,0 +1,17 @@
+{
+  "$comment": "Registry of browser images built + pushed to ghcr.io/0xteamhq/<name> by .github/workflows/browser-images.yml. Bump a `version` here and merge to main to cut a new image. `versionArg` is the Docker build-arg the image's Dockerfile reads.",
+  "images": [
+    {
+      "name": "lightpanda",
+      "context": "docker/lightpanda-webdriver",
+      "versionArg": "LIGHTPANDA_VERSION",
+      "version": "nightly"
+    },
+    {
+      "name": "chrome-headless-shell",
+      "context": "docker/chrome-headless-shell",
+      "versionArg": "CHROME_VERSION",
+      "version": "126.0.6478.182"
+    }
+  ]
+}
