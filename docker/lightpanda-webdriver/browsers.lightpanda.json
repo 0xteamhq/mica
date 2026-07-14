@@ -1,0 +1,13 @@
+{
+  "lightpanda": {
+    "default": "nightly",
+    "versions": {
+      "nightly": {
+        "image": "ghcr.io/0xteamhq/lightpanda:nightly",
+        "port": "4444",
+        "path": "",
+        "env": ["TZ=UTC"]
+      }
+    }
+  }
+}
