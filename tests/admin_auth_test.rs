@@ -51,13 +51,29 @@ async fn admin_role_gates_mutations() {
         .unwrap();
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
 
-    // Same non-admin user can read the dashboard state.
+    // Non-admin is forbidden from reading the dashboard state: it
+    // exposes per-session `owner` (the user↔session mapping kept off
+    // /status), so the read is admin-only too.
     let res = app
         .clone()
         .oneshot(
             Request::builder()
                 .uri("/admin/api/state")
                 .header(axum::http::header::AUTHORIZATION, basic("alice:s3cret"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+    // Admin can read it.
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/admin/api/state")
+                .header(axum::http::header::AUTHORIZATION, basic("root:s3cret"))
                 .body(Body::empty())
                 .unwrap(),
         )

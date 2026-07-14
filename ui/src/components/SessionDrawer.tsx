@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import RFB from "@novnc/novnc";
 import { fetchLog, killSession, vncUrl, type SessionInfo } from "../api";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { ErrorAlert } from "./ErrorAlert";
 
 type Pane = "vnc" | "logs";
 
@@ -29,38 +39,49 @@ export function SessionDrawer({
   };
 
   return (
-    <div className="drawer-backdrop" onClick={onClose}>
-      <aside className="drawer" onClick={(e) => e.stopPropagation()}>
-        <header>
-          <h2 className="mono">{session.id}</h2>
-          <button className="close" onClick={onClose} aria-label="close">
-            ×
-          </button>
-        </header>
-        <p className="muted">
-          {session.browser} {session.version} · started {session.started}
-          {session.owner && <> · {session.owner}</>}
-        </p>
-        <nav>
-          <button
-            className={pane === "vnc" ? "active" : ""}
+    <Sheet open onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="right" className="gap-0 p-0 sm:max-w-3xl">
+        <SheetHeader className="pr-12">
+          <SheetTitle className="font-mono text-sm break-all">{session.id}</SheetTitle>
+          <SheetDescription>
+            {session.browser} {session.version} · started {session.started}
+            {session.owner && <> · {session.owner}</>}
+          </SheetDescription>
+        </SheetHeader>
+        <Separator />
+        <div className="flex items-center gap-2 p-4">
+          <Button
+            variant={pane === "vnc" ? "default" : "outline"}
+            size="sm"
             disabled={!session.vnc}
             onClick={() => setPane("vnc")}
           >
             VNC
-          </button>
-          <button className={pane === "logs" ? "active" : ""} onClick={() => setPane("logs")}>
+          </Button>
+          <Button
+            variant={pane === "logs" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setPane("logs")}
+          >
             Logs
-          </button>
-          <button className="danger" onClick={kill} onBlur={() => setConfirming(false)}>
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="ml-auto"
+            onClick={kill}
+            onBlur={() => setConfirming(false)}
+          >
             {confirming ? "Confirm kill" : "Kill session"}
-          </button>
-        </nav>
-        {error && <div className="error">{error}</div>}
-        {pane === "vnc" && session.vnc && <VncPane sessionId={session.id} />}
-        {pane === "logs" && <LogPane sessionId={session.id} available={session.logs} />}
-      </aside>
-    </div>
+          </Button>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">
+          {error && <ErrorAlert message={error} />}
+          {pane === "vnc" && session.vnc && <VncPane sessionId={session.id} />}
+          {pane === "logs" && <LogPane sessionId={session.id} available={session.logs} />}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -79,9 +100,9 @@ function VncPane({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   return (
-    <div className="vnc-pane">
-      {status && <p className="muted">{status}</p>}
-      <div className="vnc-canvas" ref={target} />
+    <div className="flex min-h-96 flex-1 flex-col gap-2">
+      {status && <p className="text-muted-foreground text-sm">{status}</p>}
+      <div className="flex-1 overflow-hidden rounded-lg bg-black" ref={target} />
     </div>
   );
 }
@@ -111,12 +132,16 @@ function LogPane({ sessionId, available }: { sessionId: string; available: boole
 
   if (!available && !text) {
     return (
-      <p className="muted empty">
+      <p className="text-muted-foreground py-12 text-center text-sm">
         {error
           ? "No log file for this session (enable with --save-all-logs or enableLog)."
           : "Waiting for log output…"}
       </p>
     );
   }
-  return <pre className="log-pane">{text || "…"}</pre>;
+  return (
+    <pre className="bg-card min-h-96 flex-1 overflow-auto rounded-lg border p-3 font-mono text-xs break-all whitespace-pre-wrap">
+      {text || "…"}
+    </pre>
+  );
 }

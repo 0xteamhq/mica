@@ -24,9 +24,10 @@ use crate::caps::Caps;
 use crate::error::WdError;
 use crate::observability::names::{ROUTER_CREATES_TOTAL, ROUTER_FAILOVERS_TOTAL};
 use axum::Json;
-use axum::body::Bytes;
+use axum::body::{Body, Bytes};
 use axum::extract::State;
 use axum::http::HeaderMap;
+use axum::response::{IntoResponse, Response};
 use serde_json::Value;
 
 /// 122 random bits from a v4 UUID — enough entropy for weighted
@@ -61,7 +62,7 @@ pub async fn create_session(
     State(state): State<RouterState>,
     headers: HeaderMap,
     body: Bytes,
-) -> Result<Json<Value>, WdError> {
+) -> Result<Response, WdError> {
     let parsed: Value = serde_json::from_slice(&body)
         .map_err(|e| WdError::invalid_argument(format!("request body: {e}")))?;
     let caps = Caps::parse(&parsed).map_err(|e| WdError::invalid_argument(e.to_string()))?;
@@ -112,26 +113,24 @@ pub async fn create_session(
                     rewrite_response(&mut json, &node.name, &headers)?;
                     metrics::counter!(ROUTER_CREATES_TOTAL, "node" => node.name.clone())
                         .increment(1);
-                    return Ok(Json(json));
+                    return Ok(Json(json).into_response());
                 }
                 let retryable = status.is_server_error() || status.as_u16() == 429;
                 let text = resp.text().await.unwrap_or_default();
                 if !retryable {
                     // Client-side error (bad caps, unauthorized …):
-                    // retrying elsewhere would just repeat it. Pass
-                    // the node's W3C body through when it parses.
-                    if let Ok(v) = serde_json::from_str::<Value>(&text)
-                        && let Some(msg) = v.pointer("/value/message").and_then(|m| m.as_str())
-                    {
-                        return Err(WdError::session_not_created(format!(
-                            "node {}: {msg}",
-                            node.name
-                        )));
-                    }
-                    return Err(WdError::session_not_created(format!(
-                        "node {}: {status}: {text}",
-                        node.name
-                    )));
+                    // retrying elsewhere would just repeat it. Return
+                    // the node's status and W3C error body VERBATIM
+                    // rather than masking every 4xx as a 500.
+                    let code = axum::http::StatusCode::from_u16(status.as_u16())
+                        .unwrap_or(axum::http::StatusCode::BAD_GATEWAY);
+                    let mut out = Response::new(Body::from(text));
+                    *out.status_mut() = code;
+                    out.headers_mut().insert(
+                        axum::http::header::CONTENT_TYPE,
+                        axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    return Ok(out);
                 }
                 errors.push(format!("{}: {status}: {text}", node.name));
             }
@@ -173,7 +172,17 @@ fn rewrite_response(json: &mut Value, node_name: &str, headers: &HeaderMap) -> R
             .get(axum::http::header::HOST)
             .and_then(|h| h.to_str().ok())
     {
-        *ws = Value::String(format!("ws://{host}/session/{routed}/bidi"));
+        // Match the scheme the client reached us on: a TLS-terminating
+        // proxy in front of the router sets X-Forwarded-Proto=https, and
+        // a plaintext ws:// URL would be rejected by mixed-content rules.
+        let scheme = match headers
+            .get("x-forwarded-proto")
+            .and_then(|h| h.to_str().ok())
+        {
+            Some(p) if p.eq_ignore_ascii_case("https") => "wss",
+            _ => "ws",
+        };
+        *ws = Value::String(format!("{scheme}://{host}/session/{routed}/bidi"));
     }
     Ok(())
 }

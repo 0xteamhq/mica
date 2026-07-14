@@ -115,7 +115,15 @@ async fn forward_session_scoped(
 ) -> Result<Response, WdError> {
     let (node, upstream_id) = resolve(&state, &routed_id)?;
     let path = match tail.as_deref() {
-        Some(t) if !t.is_empty() => format!("{prefix}/{upstream_id}/{t}"),
+        Some(t) if !t.is_empty() => {
+            // `upstream_id` is guarded in session_id::decode; the tail is
+            // separately client-controlled, so guard it too before it
+            // reaches the forwarded URL (reqwest normalizes `..`).
+            if !session_id::is_traversal_safe(t) {
+                return Err(WdError::invalid_argument(format!("bad path: {t}")));
+            }
+            format!("{prefix}/{upstream_id}/{t}")
+        }
         _ => format!("{prefix}/{upstream_id}"),
     };
     forward(&state, &node, path, method, headers, body).await
@@ -181,6 +189,13 @@ async fn forward_artifact(
     let (sid, ext) = name
         .rsplit_once('.')
         .ok_or_else(|| WdError::invalid_argument(format!("bad artifact name: {name}")))?;
+    // `sid` is guarded via resolve→decode; the extension is the other
+    // client-controlled half of the name, so guard it against `..` too.
+    if !session_id::is_traversal_safe(ext) {
+        return Err(WdError::invalid_argument(format!(
+            "bad artifact name: {name}"
+        )));
+    }
     let (node, upstream_id) = resolve(&state, sid)?;
     let path = format!("/{kind}/{upstream_id}.{ext}");
     forward(&state, &node, path, method, headers, Bytes::new()).await

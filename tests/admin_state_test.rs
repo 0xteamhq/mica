@@ -82,7 +82,9 @@ async fn session_flags_reflect_host_ports() {
 async fn admin_api_is_auth_gated() {
     let hash = bcrypt::hash("s3cret", 4).unwrap();
     let f = tempfile::NamedTempFile::new().unwrap();
-    std::fs::write(f.path(), format!("alice:{hash}\n")).unwrap();
+    // Admin row: /admin/api/state exposes session owners, so it now
+    // requires the admin role (see the RequireAdmin gate).
+    std::fs::write(f.path(), format!("alice:{hash}:admin\n")).unwrap();
 
     let (state, _backend) = common::build_state("http://noop", common::args());
     let app = common::build_app(state, Some(f.path().to_str().unwrap()));

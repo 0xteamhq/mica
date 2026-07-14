@@ -27,11 +27,22 @@ pub fn encode(node_name: &str, upstream_id: &str) -> String {
     format!("{}.{}", URL_SAFE_NO_PAD.encode(node_name), upstream_id)
 }
 
+/// True when `frag` carries no `..` path segment. axum percent-decodes
+/// captured segments, so `%2F`/`%5C` arrive as literal `/` / `\`, and
+/// the `url` crate folds `\` into `/` for http(s) — split on both and
+/// reject any `..` segment. `.` is a harmless no-op and stays allowed.
+/// The guard that stops a routed id from escaping its node route (see
+/// proxy.rs); shared with tail/artifact validation.
+pub fn is_traversal_safe(frag: &str) -> bool {
+    !frag.split(['/', '\\']).any(|seg| seg == "..")
+}
+
 /// `(node_name, upstream_id)`, or None when the prefix is missing or
-/// not valid base64url / UTF-8.
+/// not valid base64url / UTF-8, or the upstream id smuggles a `..`
+/// path-traversal segment.
 pub fn decode(routed_id: &str) -> Option<(String, String)> {
     let (prefix, upstream) = routed_id.split_once('.')?;
-    if prefix.is_empty() || upstream.is_empty() {
+    if prefix.is_empty() || upstream.is_empty() || !is_traversal_safe(upstream) {
         return None;
     }
     let name_bytes = URL_SAFE_NO_PAD.decode(prefix).ok()?;
@@ -71,5 +82,20 @@ mod tests {
         // A plain node UUID (as issued by a node directly) has dashes
         // but no dot — must not decode.
         assert!(decode("4af1c8e2-aaaa-bbbb-cccc-121212121212").is_none());
+    }
+
+    #[test]
+    fn rejects_traversal_in_upstream() {
+        // axum decodes `%2F`/`%5C` to `/` / `\` before we see them.
+        let node = URL_SAFE_NO_PAD.encode("node-a");
+        assert!(decode(&format!("{node}.uuid/../../admin/api/users/eve")).is_none());
+        assert!(decode(&format!("{node}.uuid\\..\\..\\admin")).is_none());
+        // Three dots → upstream is the bare `..` traversal segment.
+        assert!(decode(&format!("{node}...")).is_none());
+        // A lone `.` (no-op) and embedded dots are not traversal.
+        assert!(decode(&format!("{node}..")).is_some());
+        assert!(decode(&format!("{node}.weird.id.with.dots")).is_some());
+        assert!(is_traversal_safe("a/b/c.mp4"));
+        assert!(!is_traversal_safe("a/../b"));
     }
 }
