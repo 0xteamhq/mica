@@ -1,0 +1,194 @@
+src/router/serve.rs
+  s_2d6906f3587275::t_7e962e03d3de1f 1-143
+  s_2d6906f3587275::t_1f11157fccafc6 144-145
+src/router/proxy.rs
+  s_2d6906f3587275::t_dafbde77dd0e81 1-205
+src/main.rs
+  s_2d6906f3587275::t_82f87a65e0c5fe 24-30
+  s_2d6906f3587275::t_69041271b04e43 211-229,232,237-240,243-244,274-279
+tests/router_test.rs
+  s_2d6906f3587275::t_e0957eae038dc1 316-318,322
+  s_2d6906f3587275::t_2faf992f2656e9 375-377
+  s_2d6906f3587275::t_908edaf2c5bd5a 1-315,319-321,323-374,378-488
+  s_2d6906f3587275::t_4c8f6c98ae837c 489-491
+  s_2d6906f3587275::t_37d025111a1881 492-512
+CLAUDE.md
+  s_2d6906f3587275::t_f2b30a44c45eda 85-92
+  s_2d6906f3587275::t_46be5d1b14c7a6 107-108
+  s_2d6906f3587275::t_d5d361ee5ded5a 23-28,34-36
+src/router/health.rs
+  s_2d6906f3587275::t_b0bd9bf529d7aa 18
+  s_2d6906f3587275::t_2ec0c5504f85f7 15-17
+  s_2d6906f3587275::t_53ccb3702e7f86 19-21
+  s_2d6906f3587275::t_8ba04188421cd4 1-14,22-133
+src/router/status.rs
+  s_2d6906f3587275::t_101278018ad2a2 3,7,14
+  s_2d6906f3587275::t_691a6adb1d28d7 1-2
+  s_2d6906f3587275::t_cee6b840025a12 4-6
+  s_2d6906f3587275::t_518009463b9ff7 8-13
+  s_2d6906f3587275::t_5b4d6964981c97 15-17
+  s_2d6906f3587275::t_abb4d53302307a 18-192
+src/router/proxy_ws.rs
+  s_2d6906f3587275::t_452fc404b1b6bf 1-64
+deploy/routing/README.md
+  s_2d6906f3587275::t_245e4e9f5a0270 3-4,6-8,10-16,18,20-47,49,51-66,68-75,77-78,80,82-93,95,97-109
+src/router/create.rs
+  s_2d6906f3587275::t_45f401ed2479f9 13-14
+  s_2d6906f3587275::t_ce5047cc72aefb 10-12
+  s_2d6906f3587275::t_6872acd56546b9 15-17
+  s_2d6906f3587275::t_900a9c956ea07a 1-9,18-234
+src/router/session_id.rs
+  s_ac98194ce7db90::t_eed201c661737c 1-75
+.gitignore
+  s_2d6906f3587275::t_f3ad34d49384f9 11
+  s_2d6906f3587275::t_71d18725147f9a 8-10
+  s_2d6906f3587275::t_bc75c315252553 7
+.github/workflows/ci.yml
+  s_2d6906f3587275::t_1bdf83e42f87a9 36-48,56-64
+.github/workflows/release.yml
+  s_2d6906f3587275::t_22c623145d0884 31-37,41
+Cargo.lock
+  s_2d6906f3587275::t_5405e2e1de19dd 325,424,459,794-802,999,1082-1087,1132-1140,1269,1340-1348,1402,1422-1423,1427-1437,1541,2044,2129-2137,2854,2937,2944,2963-2972,3150,3244,3628-3663,3826-3834,4087-4088,4098-4110,4153,4488-4499,4775-4780,4882-4891,5162
+Cargo.toml
+  s_2d6906f3587275::t_592ca80e15ccdc 53-60
+Dockerfile
+  s_2d6906f3587275::t_0ebf97c3994212 3-13,35-36,38
+src/auth.rs
+  s_2d6906f3587275::t_3ff391f6990809 23-33,37,43-57,65,67,91-103,114-181,187-191,253,255-258,271-289,320-322,327-351
+src/cli.rs
+  s_2d6906f3587275::t_2ac9d627ee79ff 208-256
+src/config/mod.rs
+  s_2d6906f3587275::t_106c49ca6ea76b 29-55
+src/events.rs
+  s_2d6906f3587275::t_c0f3f6b5a9e9e4 6-11,16,58-82,86-96,104-112
+src/handlers/admin/assets.rs
+  s_2d6906f3587275::t_884a48a070fb1d 1-65
+src/handlers/admin/events.rs
+  s_2d6906f3587275::t_9b33ac3f66a1b5 1-82
+src/handlers/admin/mod.rs
+  s_2d6906f3587275::t_fce9fd9fa2e103 1-37
+src/handlers/admin/ops.rs
+  s_2d6906f3587275::t_598e2e60836c15 1-67
+src/handlers/admin/quotas.rs
+  s_2d6906f3587275::t_0a3a70ea251b57 1-55
+src/handlers/admin/registry.rs
+  s_2d6906f3587275::t_d084c1c7e8bd5d 1-71
+src/handlers/admin/state.rs
+  s_2d6906f3587275::t_7d1c0e48a258f4 1-97
+src/handlers/admin/users.rs
+  s_2d6906f3587275::t_75439667f0cced 1-128
+src/handlers/bidi.rs
+  s_2d6906f3587275::t_034685e9595445 7-8,12-13,43
+src/handlers/create.rs
+  s_2d6906f3587275::t_057685d42ea27a 25,29,47-51,81,86-87,99,103-107,140-157,239-242,333-335,378,385-391
+src/handlers/health.rs
+  s_2d6906f3587275::t_c6657e5785378f 25-29
+src/handlers/mod.rs
+  s_2d6906f3587275::t_8d868a877f93e8 8-9,13,58-62
+src/handlers/status.rs
+  s_2d6906f3587275::t_7bc2d1155a7068 15-18,55
+src/lib.rs
+  s_2d6906f3587275::t_c58d1904d242af 14-16,22
+src/observability.rs
+  s_2d6906f3587275::t_50dc43b7f9cff3 34-40
+src/quota.rs
+  s_2d6906f3587275::t_8e3b75c34ff65a 1-148
+src/reload.rs
+  s_2d6906f3587275::t_db98ca63258cd1 1-84
+src/router/mod.rs
+  s_2d6906f3587275::t_dfccd673f5bbfd 1-76
+src/router/registry.rs
+  s_2d6906f3587275::t_5f59f35f40febc 1-337
+src/session/map.rs
+  s_2d6906f3587275::t_3a0ba51cdbd562 35-37,41-43
+src/session/mod.rs
+  s_2d6906f3587275::t_4e3ef0e998e1b0 32-36,93,104,130,155-157
+src/state.rs
+  s_2d6906f3587275::t_2385a303f8dea6 7,14,19,42-56,77-80,84-97
+src/ws_bridge.rs
+  s_2d6906f3587275::t_ade1494a2781f7 1-88
+tests/admin_auth_test.rs
+  s_2d6906f3587275::t_8be4380d0e1f1f 1-84
+tests/admin_events_test.rs
+  s_2d6906f3587275::t_f798da4e79ea11 1-139
+tests/admin_ops_test.rs
+  s_2d6906f3587275::t_47e197feb96da7 1-204
+tests/admin_registry_test.rs
+  s_2d6906f3587275::t_018f4484b78602 1-119
+tests/admin_state_test.rs
+  s_2d6906f3587275::t_128f20d5a4bcac 1-119
+tests/admin_users_test.rs
+  s_2d6906f3587275::t_dcdaa79d902a0a 1-144
+tests/auth_test.rs
+  s_2d6906f3587275::t_fc8504b88bc954 6,17
+tests/common/mod.rs
+  s_2d6906f3587275::t_faf6db5b6bb343 1-43
+tests/health_test.rs
+  s_2d6906f3587275::t_e1238f756f1959 3,13-19
+tests/lifecycle_test.rs
+  s_2d6906f3587275::t_8cdf661921a4b0 7,22-30
+tests/openapi_test.rs
+  s_2d6906f3587275::t_317c434413a741 3,13
+tests/quota_test.rs
+  s_2d6906f3587275::t_cf129a2a4d817d 1-142
+tests/status_test.rs
+  s_2d6906f3587275::t_53a1531db99a7d 3,15-21
+ui/index.html
+  s_2d6906f3587275::t_676d61169b27d3 1-12
+ui/package-lock.json
+  s_2d6906f3587275::t_cbe6de635481d2 1-1869
+ui/package.json
+  s_2d6906f3587275::t_40c11bac1279fd 1-23
+ui/src/App.tsx
+  s_2d6906f3587275::t_16d1bca1b74983 1-103
+ui/src/api.ts
+  s_2d6906f3587275::t_d4ab7f02923437 1-193
+ui/src/app.css
+  s_2d6906f3587275::t_de652440fa79ef 1-320
+ui/src/components/CapacityTiles.tsx
+  s_2d6906f3587275::t_36807e55aab48f 1-20
+ui/src/components/QuotasPage.tsx
+  s_2d6906f3587275::t_e554ced7175467 1-102
+ui/src/components/RegistryEditor.tsx
+  s_2d6906f3587275::t_22bb52e376469b 1-74
+ui/src/components/RegistryView.tsx
+  s_2d6906f3587275::t_9cc2414a94506e 1-30
+ui/src/components/SessionDrawer.tsx
+  s_2d6906f3587275::t_72018ce796a597 1-122
+ui/src/components/SessionsTable.tsx
+  s_2d6906f3587275::t_636481b0706cc9 1-52
+ui/src/components/UsersPage.tsx
+  s_2d6906f3587275::t_aaec42ee2a0a83 1-89
+ui/src/main.tsx
+  s_2d6906f3587275::t_8d2ec9a1569182 1-10
+ui/src/novnc.d.ts
+  s_2d6906f3587275::t_7342a872d1aec6 1-15
+ui/tsconfig.json
+  s_2d6906f3587275::t_c0e9e369472836 1-18
+ui/vite.config.ts
+  s_2d6906f3587275::t_20c1cde4c6b95b 1-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "15f036b4b8e43f14180c683e8ba1c6338bcc90dd",
+  "prompts": {},
+  "sessions": {
+    "s_2d6906f3587275": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1704d671-e8eb-4328-ac8c-3673bdc206c1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "vasanth <itsparser@gmail.com>"
+    },
+    "s_ac98194ce7db90": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24ad9e4b-582c-4785-b3a4-b1f2ab029969",
+        "model": "claude-fable-5"
+      },
+      "human_author": "vasanth <itsparser@gmail.com>"
+    }
+  }
+}
