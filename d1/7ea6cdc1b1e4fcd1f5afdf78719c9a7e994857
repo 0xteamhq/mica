@@ -1,0 +1,159 @@
+src/handlers/admin/users.rs
+  s_ac98194ce7db90::t_87828397adb160 51-62
+ui/src/components/ErrorAlert.tsx
+  s_82b483e0d082b9::t_f608aa75e28a00 1-11
+Cargo.toml
+  s_ac98194ce7db90::t_af3d0c4191f995 33-35
+ui/src/components/ui/card.tsx
+  s_ac98194ce7db90::t_b3324c60a05857 1-82
+src/handlers/admin/mod.rs
+  s_ac98194ce7db90::t_8930caae54ee2d 4-7
+deploy/openapi/mica.yaml
+  s_ac98194ce7db90::t_e35387c36091cf 338,344-349
+ui/src/app.css
+  s_ac98194ce7db90::t_73279704852be6 1-40,42-72,75-101,105-115
+ui/src/components/ui/alert-dialog.tsx
+  s_82b483e0d082b9::t_f6ec23cb69bf54 1-137
+src/handlers/admin/events.rs
+  s_ac98194ce7db90::t_4caa6ecec99644 13
+  s_ac98194ce7db90::t_e3dca4cb016d57 28,30
+ui/src/components/ui/separator.tsx
+  s_82b483e0d082b9::t_32f5fefa2f0f5e 1-25
+src/router/session_id.rs
+  s_ac98194ce7db90::t_d711e960bf3a7e 86-92,97-100
+  s_ac98194ce7db90::t_6523214184db43 93-96
+  s_ac98194ce7db90::t_010b973525774c 30-39,41-42,45
+ui/src/components/UsersPage.tsx
+  s_82b483e0d082b9::t_50422b9e9b3579 3-17,58-67,70,74-78,80-83,86-88,91-133
+ui/src/components/ui/table.tsx
+  s_ac98194ce7db90::t_323b6070c47b06 1-66
+ui/src/components/ui/input.tsx
+  s_ac98194ce7db90::t_5f5167baaf91dd 1-18
+ui/src/lib/browsers.ts
+  s_82b483e0d082b9::t_03f3da104ea603 1-4,13-23,27-30,82-83,190
+  s_82b483e0d082b9::t_c770f7e3d9edc6 84-92
+  s_82b483e0d082b9::t_1135c53d5dd16d 126-168
+  s_82b483e0d082b9::t_81771a4ec974df 5-12,24-26,31-81,93-96,98-100,104-108,110-123
+  s_82b483e0d082b9::t_7de5d31eeaea40 169-189
+  s_82b483e0d082b9::t_b79cb2fdb0d18e 97,101-103,109,124-125
+ui/src/pages/SessionsPage.tsx
+  s_82b483e0d082b9::t_b22bb6d58b23a1 1-17
+ui/src/lib/utils.ts
+  s_ac98194ce7db90::t_c488c5f6218b70 1-6
+src/router/proxy.rs
+  s_2d6906f3587275::t_c644a80b2f6e76 195-197
+  s_ac98194ce7db90::t_a4c929c4b695e8 118-126
+  s_ac98194ce7db90::t_a67dd672833451 192-194,198
+ui/tsconfig.json
+  s_ac98194ce7db90::t_1a11b533a26891 15-19
+ui/src/components/SessionDrawer.tsx
+  s_82b483e0d082b9::t_af9daecddda370 4-13,42-55,60-65,67-74,76-84,103-105,135,142-146
+ui/src/Layout.tsx
+  s_82b483e0d082b9::t_033cf0cd61c193 1-175
+ui/src/components/SessionsTable.tsx
+  s_82b483e0d082b9::t_b8c3159aa93c94 2-11,30-32,35-72
+ui/src/components/RegistryEditor.tsx
+  s_82b483e0d082b9::t_e2ca81c1483a69 194-196,199-214,216-243,245
+  s_82b483e0d082b9::t_9441f736838bbe 1,3-9,12-13,19-24,28-36,38-43,46,57,59,65,67,69-99,101-132,142-147,153,158-159,170,174-178,180-182,186,215,244,246-249
+  s_82b483e0d082b9::t_dba2711bbefa5b 2,15
+  s_82b483e0d082b9::t_2195247e4bca09 14,16,68,100
+  s_82b483e0d082b9::t_4c032b9de8f68f 154-157,160-169,171-173,179,183-185,187-192,197-198,250-253
+  s_82b483e0d082b9::t_6117ef7b0919f9 10-11
+  s_82b483e0d082b9::t_6d8035d1062101 133-141,148-152
+  s_3c44c9d5f8c4c7::t_741fd8ae75d0d2 66
+ui/src/components/ui/checkbox.tsx
+  s_ac98194ce7db90::t_61d5bc15ed6eff 1-29
+ui/src/layoutContext.ts
+  s_82b483e0d082b9::t_d5b69f84a413e4 1-12
+src/router/create.rs
+  s_ac98194ce7db90::t_85e9c6ced4e3d6 27,30
+  s_ac98194ce7db90::t_83dfc9d8368ca0 65
+  s_ac98194ce7db90::t_cc0b48b2c68030 175-185
+  s_ac98194ce7db90::t_431ad8149299c9 116,122-133
+tests/router_test.rs
+  s_ac98194ce7db90::t_69368d8b9dbf95 193-196
+ui/vite.config.ts
+  s_ac98194ce7db90::t_e2c27debc34762 1,4,11-16
+tests/admin_state_test.rs
+  s_ac98194ce7db90::t_501af915fa3d0a 85-87
+src/handlers/admin/quotas.rs
+  s_ac98194ce7db90::t_2004ea8c2e142c 39-42
+tests/admin_auth_test.rs
+  s_ac98194ce7db90::t_89332eefa1f046 54-56,68-76
+  s_ac98194ce7db90::t_207ad8adae6a9e 77-79
+  s_82b483e0d082b9::t_19afea624a9ca7 80-81
+ui/src/components/ui/label.tsx
+  s_ac98194ce7db90::t_117ef4032524ef 1-21
+ui/src/components/ui/badge.tsx
+  s_ac98194ce7db90::t_6d61df5f242f84 1-34
+ui/src/components/ui/sheet.tsx
+  s_82b483e0d082b9::t_3e3e4a454cdb81 1-109
+ui/src/components/CapacityTiles.tsx
+  s_82b483e0d082b9::t_bc30ad14a7edc8 2,6-9,12,14-19
+ui/src/main.tsx
+  s_82b483e0d082b9::t_4535f177f44659 3,7-9,12-14
+ui/src/pages/BrowsersPage.tsx
+  s_82b483e0d082b9::t_44d9761d7582fd 5-6
+  s_82b483e0d082b9::t_b403045428d8b0 1-4,7
+ui/src/components/ui/button.tsx
+  s_ac98194ce7db90::t_4493429c0daa98 1-49
+ui/src/components/QuotasPage.tsx
+  s_82b483e0d082b9::t_0fb7e727da7eb7 3-15,42,46-65,68,72-73,81,84-86,88-121
+ui/src/App.tsx
+  s_82b483e0d082b9::t_039f35b372243c 1-4,10-19
+ui/package.json
+  s_82b483e0d082b9::t_44e24c8e386af2 24
+  s_82b483e0d082b9::t_a4b9ce4a6bbec6 13
+  s_ac98194ce7db90::t_e1da7c52f9ec33 14-21,23,25,28,32-33
+src/handlers/admin/state.rs
+  s_ac98194ce7db90::t_492b98e4fc1f9b 52-54
+  s_ac98194ce7db90::t_5ea34f71246914 7
+ui/src/components/RegistryView.tsx
+  s_82b483e0d082b9::t_e627e5f84594d2 3-4,6,22-25,29-56,58-59,61-64,88-96
+  s_82b483e0d082b9::t_4b976b6d3303e2 5,21,26
+  s_82b483e0d082b9::t_d33845513db20b 1,8-18,57,60,65-87
+ui/package-lock.json
+  s_82b483e0d082b9::t_af9b6ab3b7b3b3 12-20,22-24,27,31-32,817-1264,1661-1664,1668-1674,1677-1680,1683-1707,1710-1981,2001,2011,2038-2049,2118-2138,2146-2158,2163,2184-2199,2207-2220,2316-2341,2375-2378,2380,2382-2674,2793-2899,2961-2966,2977-3007,3025-3040,3086-3128
+Cargo.lock
+  s_82b483e0d082b9::t_f7f94434605dcf 4508,4510,4741
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "d17ea6cdc1b1e4fcd1f5afdf78719c9a7e994857",
+  "prompts": {},
+  "sessions": {
+    "s_2d6906f3587275": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1704d671-e8eb-4328-ac8c-3673bdc206c1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "vasanth <itsparser@gmail.com>"
+    },
+    "s_3c44c9d5f8c4c7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4c92b84-4e26-4a23-a4b2-42a96adcded5",
+        "model": "claude-fable-5"
+      },
+      "human_author": "vasanth <itsparser@gmail.com>"
+    },
+    "s_82b483e0d082b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b29db87-f7e3-4856-a612-a892ccabe4a2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "vasanth <itsparser@gmail.com>"
+    },
+    "s_ac98194ce7db90": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24ad9e4b-582c-4785-b3a4-b1f2ab029969",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "vasanth <itsparser@gmail.com>"
+    }
+  }
+}
