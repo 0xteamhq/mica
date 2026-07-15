@@ -1,0 +1,21 @@
+src/handlers/admin/recordings.rs
+  s_82b483e0d082b9::t_a1c01167ddd257 41-50,52-60,124-126,130-132
+tests/admin_recordings_test.rs
+  s_82b483e0d082b9::t_a1c01167ddd257 70-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "c8118b0731c042bc7e85d4628f16a5ff95aba1f7",
+  "prompts": {},
+  "sessions": {
+    "s_82b483e0d082b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b29db87-f7e3-4856-a612-a892ccabe4a2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "vasanth <itsparser@gmail.com>"
+    }
+  }
+}
