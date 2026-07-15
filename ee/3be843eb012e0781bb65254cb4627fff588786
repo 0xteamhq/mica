@@ -1,0 +1,29 @@
+tests/admin_recordings_test.rs
+  s_82b483e0d082b9::t_0daf9a6e9a80ee 67-71
+  s_82b483e0d082b9::t_f605860515b94e 54-56
+src/handlers/admin/recordings.rs
+  s_82b483e0d082b9::t_0fcee6c2238a89 109-113
+  s_82b483e0d082b9::t_f25be56cfd2667 53-56,58-59,61-71,78
+  s_82b483e0d082b9::t_501069a96be0e8 74-77
+ui/src/api.ts
+  s_82b483e0d082b9::t_2e63b8bbd8957b 197,201
+ui/src/Layout.tsx
+  s_82b483e0d082b9::t_3f469d954194e7 44-46,49-50,52,56-59,63-76,88-89
+  s_82b483e0d082b9::t_08d1e889f7cedc 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "ee3be843eb012e0781bb65254cb4627fff588786",
+  "prompts": {},
+  "sessions": {
+    "s_82b483e0d082b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b29db87-f7e3-4856-a612-a892ccabe4a2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "vasanth <itsparser@gmail.com>"
+    }
+  }
+}
