@@ -181,6 +181,26 @@ export async function putQuotas(q: { default: number; users: Record<string, numb
   );
 }
 
+export interface RecordingInfo {
+  id: string;
+  video: boolean;
+  videoBytes: number;
+  log: boolean;
+  modified: string;
+}
+
+export async function fetchRecordings(): Promise<RecordingInfo[]> {
+  return (await expect(await fetch("/admin/api/recordings"), "recordings")).json();
+}
+
+export function videoUrl(id: string): string {
+  return `/video/${id}.mp4`;
+}
+
+export function logDownloadUrl(id: string): string {
+  return `/logs/${id}.log`;
+}
+
 export async function fetchLog(sessionId: string): Promise<string> {
   const res = await fetch(`/logs/${sessionId}.log`);
   if (!res.ok) throw new Error(`log: HTTP ${res.status}`);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { Activity, Boxes, Gauge, Power, RefreshCw, Users } from "lucide-react";
+import { Activity, Boxes, Film, Gauge, Power, RefreshCw, Users } from "lucide-react";
 import {
   fetchState,
   reloadConfig,
@@ -30,6 +30,7 @@ import { ErrorAlert } from "./components/ErrorAlert";
 
 const NAV = [
   { to: "sessions", label: "Sessions", icon: Activity },
+  { to: "recordings", label: "Recordings", icon: Film },
   { to: "browsers", label: "Browsers", icon: Boxes },
   { to: "users", label: "Users", icon: Users },
   { to: "quotas", label: "Quotas", icon: Gauge },
@@ -52,7 +53,7 @@ export function Layout() {
 
   useEffect(() => {
     refresh();
-    return subscribe({
+    const unsubscribe = subscribe({
       onStats: setStats,
       // Lifecycle events carry only deltas; the snapshot has the
       // enriched per-session flags, so refetch on change.
@@ -62,6 +63,16 @@ export function Layout() {
       onDrain: refresh,
       onConfigReloaded: refresh,
     });
+    // Belt-and-suspenders poll: SSE delivers lifecycle events instantly,
+    // but a session can sit "pending" for seconds while its container
+    // boots, and a dropped/reconnecting stream could miss an event. A
+    // periodic snapshot keeps the session list — and the age column —
+    // live regardless.
+    const poll = setInterval(refresh, 3000);
+    return () => {
+      unsubscribe();
+      clearInterval(poll);
+    };
   }, [refresh]);
 
   const draining = stats?.draining ?? state?.draining ?? false;
