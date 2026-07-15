@@ -13,6 +13,7 @@ pub mod assets;
 pub mod events;
 pub mod ops;
 pub mod quotas;
+pub mod recordings;
 pub mod registry;
 pub mod state;
 pub mod users;
@@ -35,4 +36,5 @@ pub fn api_router() -> Router<AppState> {
         .route("/users", get(users::list))
         .route("/users/:name", put(users::upsert).delete(users::delete))
         .route("/quotas", get(quotas::get).put(quotas::put))
+        .route("/recordings", get(recordings::list))
 }
