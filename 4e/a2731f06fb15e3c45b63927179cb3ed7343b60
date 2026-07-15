@@ -1,0 +1,19 @@
+ui/src/pages/RecordingsPage.tsx
+  s_82b483e0d082b9::t_187ffdb53db4bd 39-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "4ea2731f06fb15e3c45b63927179cb3ed7343b60",
+  "prompts": {},
+  "sessions": {
+    "s_82b483e0d082b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b29db87-f7e3-4856-a612-a892ccabe4a2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "vasanth <itsparser@gmail.com>"
+    }
+  }
+}
