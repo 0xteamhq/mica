@@ -1,0 +1,37 @@
+src/handlers/admin/recordings.rs
+  s_82b483e0d082b9::t_436ebb024e1bd5 23
+  s_82b483e0d082b9::t_4603194313afd6 71-74
+  s_82b483e0d082b9::t_09aa6e443f3ac4 1-22,24-70,75-105
+ui/src/Layout.tsx
+  s_82b483e0d082b9::t_2f3779c8879b92 56,66-75
+  s_82b483e0d082b9::t_558994a8d95d85 33
+  s_82b483e0d082b9::t_83d52cecf38773 3
+ui/src/api.ts
+  s_82b483e0d082b9::t_7bd248087a5b18 184-203
+ui/src/pages/RecordingsPage.tsx
+  s_82b483e0d082b9::t_3b734b8294ac45 1-114
+ui/src/App.tsx
+  s_82b483e0d082b9::t_8704def2ef73f6 15
+  s_82b483e0d082b9::t_f7337be132932a 4
+tests/admin_recordings_test.rs
+  s_82b483e0d082b9::t_3908a18e2b347c 1-128
+src/handlers/admin/mod.rs
+  s_82b483e0d082b9::t_0e57d6bb86c062 39
+  s_82b483e0d082b9::t_1cabb323d97504 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "f9c1040aa0f119fa8b6e3cfd583ecf8912ebba8b",
+  "prompts": {},
+  "sessions": {
+    "s_82b483e0d082b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b29db87-f7e3-4856-a612-a892ccabe4a2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "vasanth <itsparser@gmail.com>"
+    }
+  }
+}
