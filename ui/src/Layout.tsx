@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Activity, Boxes, Film, Gauge, Power, RefreshCw, Users } from "lucide-react";
 import {
@@ -41,18 +41,39 @@ export function Layout() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { pathname } = useLocation();
+  // Monotonic request id: only the latest fetch is allowed to write, so
+  // a slow response that lands after a newer one can't clobber it.
+  const reqSeq = useRef(0);
 
   const refresh = useCallback(() => {
-    fetchState()
+    const seq = ++reqSeq.current;
+    return fetchState()
       .then((s) => {
+        if (seq !== reqSeq.current) return;
         setState(s);
         setError(null);
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => {
+        if (seq !== reqSeq.current) return;
+        setError(String(e));
+      });
   }, []);
 
   useEffect(() => {
-    refresh();
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Belt-and-suspenders poll: SSE delivers lifecycle events instantly,
+    // but a session can sit "pending" for seconds while its container
+    // boots, and a dropped/reconnecting stream could miss an event. A
+    // periodic snapshot keeps the session list — and the age column —
+    // live regardless. Self-scheduling (not setInterval) so a slow or
+    // stalled request can't stack up more in-flight fetches.
+    const poll = () => {
+      refresh().finally(() => {
+        if (active) timer = setTimeout(poll, 3000);
+      });
+    };
+    poll();
     const unsubscribe = subscribe({
       onStats: setStats,
       // Lifecycle events carry only deltas; the snapshot has the
@@ -63,15 +84,10 @@ export function Layout() {
       onDrain: refresh,
       onConfigReloaded: refresh,
     });
-    // Belt-and-suspenders poll: SSE delivers lifecycle events instantly,
-    // but a session can sit "pending" for seconds while its container
-    // boots, and a dropped/reconnecting stream could miss an event. A
-    // periodic snapshot keeps the session list — and the age column —
-    // live regardless.
-    const poll = setInterval(refresh, 3000);
     return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
       unsubscribe();
-      clearInterval(poll);
     };
   }, [refresh]);
 

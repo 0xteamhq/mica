@@ -50,21 +50,32 @@ pub async fn list(_admin: RequireAdmin, State(state): State<AppState>) -> Json<V
     })
     .await;
 
-    let mut out: Vec<Recording> = by_id
+    // Carry the raw mtime so ordering is by real (sub-second) time, not
+    // the second-truncated display string — otherwise recordings
+    // finalized in the same second would fall back to id order.
+    let mut out: Vec<(Option<SystemTime>, Recording)> = by_id
         .into_iter()
-        .map(|(id, (video, bytes, log, mtime))| Recording {
-            id,
-            video,
-            video_bytes: bytes,
-            log,
-            modified: mtime
+        .map(|(id, (video, bytes, log, mtime))| {
+            let modified = mtime
                 .map(|t| humantime::format_rfc3339_seconds(t).to_string())
-                .unwrap_or_default(),
+                .unwrap_or_default();
+            (
+                mtime,
+                Recording {
+                    id,
+                    video,
+                    video_bytes: bytes,
+                    log,
+                    modified,
+                },
+            )
         })
         .collect();
-    // Newest first; empty mtime sorts last.
-    out.sort_by(|a, b| b.modified.cmp(&a.modified));
-    Json(out)
+    // Newest first; `None` (no mtime) sorts last. `Reverse` over the
+    // Option flips the ascending sort — None outranks every Some under
+    // Reverse, so it lands at the end.
+    out.sort_by_key(|(mtime, _)| std::cmp::Reverse(*mtime));
+    Json(out.into_iter().map(|(_, r)| r).collect::<Vec<_>>())
 }
 
 fn bump(slot: &mut Option<SystemTime>, meta: &std::fs::Metadata) {
@@ -95,6 +106,11 @@ async fn scan<F>(
         let Some(id) = name.strip_suffix(&format!(".{ext}")) else {
             continue;
         };
+        // A bare `.mp4`/`.log` (extension only, no stem) yields an empty
+        // id that no client could reference — skip it.
+        if id.is_empty() {
+            continue;
+        }
         let Ok(meta) = entry.metadata().await else { continue };
         if !meta.is_file() {
             continue;

@@ -51,6 +51,9 @@ async fn reconstructs_sessions_from_video_and_log_files() {
     std::fs::write(logs.path().join("sess-c.log"), b"log-c").unwrap();
     // A non-artifact file (wrong extension) must be ignored, not listed.
     std::fs::write(video.path().join("notes.txt"), b"ignore").unwrap();
+    // A bare `.mp4`/`.log` (extension only) must not produce an empty id.
+    std::fs::write(video.path().join(".mp4"), b"x").unwrap();
+    std::fs::write(logs.path().join(".log"), b"x").unwrap();
 
     let state = state_for(
         video.path().to_str().unwrap(),
@@ -61,7 +64,11 @@ async fn reconstructs_sessions_from_video_and_log_files() {
     assert_eq!(
         json.as_array().unwrap().len(),
         3,
-        "one row per session id, notes.txt ignored: {json}"
+        "one row per session id; notes.txt and bare .mp4/.log ignored: {json}"
+    );
+    assert!(
+        json.as_array().unwrap().iter().all(|r| !r["id"].as_str().unwrap().is_empty()),
+        "no empty-id rows: {json}"
     );
 
     let a = row(&json, "sess-a");

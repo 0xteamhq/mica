@@ -194,11 +194,11 @@ export async function fetchRecordings(): Promise<RecordingInfo[]> {
 }
 
 export function videoUrl(id: string): string {
-  return `/video/${id}.mp4`;
+  return `/video/${encodeURIComponent(id)}.mp4`;
 }
 
 export function logDownloadUrl(id: string): string {
-  return `/logs/${id}.log`;
+  return `/logs/${encodeURIComponent(id)}.log`;
 }
 
 export async function fetchLog(sessionId: string): Promise<string> {
