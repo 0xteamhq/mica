@@ -38,16 +38,26 @@ pub async fn list(_admin: RequireAdmin, State(state): State<AppState>) -> Json<V
     // (video?, bytes, log?, newest-mtime) keyed by session id.
     let mut by_id: BTreeMap<String, (bool, u64, bool, Option<SystemTime>)> = BTreeMap::new();
 
-    scan(&state.args.video_output_dir, "mp4", &mut by_id, |e, meta, len| {
-        e.0 = true;
-        e.1 = len;
-        bump(&mut e.3, meta);
-    })
+    scan(
+        &state.args.video_output_dir,
+        "mp4",
+        &mut by_id,
+        |e, meta, len| {
+            e.0 = true;
+            e.1 = len;
+            bump(&mut e.3, meta);
+        },
+    )
     .await;
-    scan(&state.args.log_output_dir, "log", &mut by_id, |e, meta, _| {
-        e.2 = true;
-        bump(&mut e.3, meta);
-    })
+    scan(
+        &state.args.log_output_dir,
+        "log",
+        &mut by_id,
+        |e, meta, _| {
+            e.2 = true;
+            bump(&mut e.3, meta);
+        },
+    )
     .await;
 
     // Carry the raw mtime so ordering is by real (sub-second) time, not
@@ -111,11 +121,15 @@ async fn scan<F>(
         if id.is_empty() {
             continue;
         }
-        let Ok(meta) = entry.metadata().await else { continue };
+        let Ok(meta) = entry.metadata().await else {
+            continue;
+        };
         if !meta.is_file() {
             continue;
         }
-        let e = by_id.entry(id.to_string()).or_insert((false, 0, false, None));
+        let e = by_id
+            .entry(id.to_string())
+            .or_insert((false, 0, false, None));
         f(e, &meta, meta.len());
     }
 }

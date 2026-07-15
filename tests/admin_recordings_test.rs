@@ -67,7 +67,10 @@ async fn reconstructs_sessions_from_video_and_log_files() {
         "one row per session id; notes.txt and bare .mp4/.log ignored: {json}"
     );
     assert!(
-        json.as_array().unwrap().iter().all(|r| !r["id"].as_str().unwrap().is_empty()),
+        json.as_array()
+            .unwrap()
+            .iter()
+            .all(|r| !r["id"].as_str().unwrap().is_empty()),
         "no empty-id rows: {json}"
     );
 
