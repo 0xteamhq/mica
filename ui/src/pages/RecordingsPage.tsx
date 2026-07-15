@@ -36,7 +36,17 @@ export function RecordingsPage() {
   useEffect(refresh, [refresh]);
 
   if (error) return <ErrorAlert message={error} />;
-  if (!recordings) return null;
+  if (!recordings) {
+    return (
+      <div className="text-muted-foreground flex items-center justify-center gap-2 py-12 text-sm">
+        <span
+          className="border-muted-foreground/30 border-t-foreground size-4 animate-spin rounded-full border-2"
+          aria-hidden
+        />
+        Loading recordings…
+      </div>
+    );
+  }
 
   if (recordings.length === 0) {
     return (
