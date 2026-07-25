@@ -1,0 +1,120 @@
+ui/src/components/DataTable.tsx
+  s_82b483e0d082b9::t_68d5e688454187 6
+  s_82b483e0d082b9::t_5db9a0c026c10b 140,144-150
+  s_82b483e0d082b9::t_7644fcb2f0872d 8
+  s_82b483e0d082b9::t_47a78cef0692d4 1-5,7,9-139,141-143,151-237
+src/cli.rs
+  s_82b483e0d082b9::t_efcdd43b47a514 111-117
+docker/chromium-recorder/entrypoint.sh
+  s_82b483e0d082b9::t_db4f36b039607a 15-21
+  s_82b483e0d082b9::t_a305dfd616ce51 48
+  s_82b483e0d082b9::t_a8ff318fb2484d 1-14,22-40,42-47,49-59
+  s_82b483e0d082b9::t_a2d71f89839aca 41
+ui/src/pages/RecordingsPage.tsx
+  s_82b483e0d082b9::t_1ece91d2a5b023 8-13,30-43,51,186-189,191-219,221-223,226-229,236,240-274,276-278,280
+  s_82b483e0d082b9::t_1c4e2f0a0fe7a7 29,46-47,87,230-235,237-239,275,279
+  s_82b483e0d082b9::t_c0c3c482b326d0 98,122,185
+  s_82b483e0d082b9::t_0be86c0b4fb173 2,4,44-45,77-86,88-97,99-121,123-160,163-184,190
+ui/src/hooks/use-mobile.ts
+  s_82b483e0d082b9::t_5774ddc0ac765b 1-19
+docker/chromium-recorder/Dockerfile
+  s_82b483e0d082b9::t_bb8a4dc7f879f3 1-26
+  s_82b483e0d082b9::t_691fee41f3bd91 27-31
+ui/src/components/ui/combobox.tsx
+  s_82b483e0d082b9::t_f7e3acc8886ba6 1-97
+ui/src/app.css
+  s_82b483e0d082b9::t_5774ddc0ac765b 4-5
+ui/src/components/ui/button.tsx
+  s_82b483e0d082b9::t_5774ddc0ac765b 1-5,8,12,14,16-20,25-26,29-31,34-39,43-44,48-52,56-57,61,64
+ui/src/components/ui/skeleton.tsx
+  s_82b483e0d082b9::t_5774ddc0ac765b 1-13
+ui/src/components/ui/sidebar.tsx
+  s_82b483e0d082b9::t_5774ddc0ac765b 1-726
+ui/src/components/CapacityTiles.tsx
+  s_82b483e0d082b9::t_425dab8f5c7bcf 1,6-10,13-25
+ui/src/components/ui/popover.tsx
+  s_82b483e0d082b9::t_b492eee4dc90a7 1-35
+src/main.rs
+  s_82b483e0d082b9::t_0655741f01e3a4 97
+  s_82b483e0d082b9::t_38f332b829c010 122-128
+ui/src/components/ui/input.tsx
+  s_82b483e0d082b9::t_5774ddc0ac765b 1-3,11-14,18,21
+ui/src/components/ui/tooltip.tsx
+  s_82b483e0d082b9::t_5774ddc0ac765b 1-55
+ui/src/Layout.tsx
+  s_82b483e0d082b9::t_b42d932f751c68 26-39,120-205,207-210,227-228
+  s_82b483e0d082b9::t_903d617cd44cea 219-222
+ui/components.json
+  s_82b483e0d082b9::t_b369c9b46df05d 1-21
+ui/src/components/ui/separator.tsx
+  s_82b483e0d082b9::t_5774ddc0ac765b 1-4,18-19,23,26
+deploy/compose/docker-compose.yml
+  s_82b483e0d082b9::t_6789b8a03defad 1-88
+ui/src/api.ts
+  s_82b483e0d082b9::t_845ad034253afa 190-196
+src/backend/docker.rs
+  s_82b483e0d082b9::t_96415b1c1daca7 357-361
+  s_82b483e0d082b9::t_5317bdad5ab1bf 80
+  s_82b483e0d082b9::t_c9f53b7d950535 116-122
+  s_82b483e0d082b9::t_884fdcfed4ce02 236-245,248
+  s_82b483e0d082b9::t_5a5004ea3c264c 54-57
+src/handlers/create.rs
+  s_82b483e0d082b9::t_60ec130b0703b7 315-318
+  s_82b483e0d082b9::t_54b67e43acd716 230-238
+  s_82b483e0d082b9::t_66288724952fd8 260-261,263
+  s_82b483e0d082b9::t_6415c7d09b495a 256
+  s_82b483e0d082b9::t_560f03ee153bff 282,298-308,335-336
+  s_82b483e0d082b9::t_c84d1dff9a8002 286-288,309-314,319-334
+ui/src/components/ui/sheet.tsx
+  s_82b483e0d082b9::t_5774ddc0ac765b 1,3-16,19-28,39-40,44,51,54-55,63,65,67,69,71-72,77-82,85,95-105,115,118,128,131,136-137,140,143
+deploy/compose/browsers.json
+  s_82b483e0d082b9::t_94044d1e07bfe6 1-19
+docs/superpowers/specs/2026-07-15-github-promotion-skills-design.md
+  s_acbc5f182caba2::t_1fb597dc5e4640 1-60
+ui/package.json
+  s_82b483e0d082b9::t_0390552c9c7d43 17,24
+  s_82b483e0d082b9::t_26b3c4071d7a12 18
+  s_82b483e0d082b9::t_59ecade437f826 21
+  s_82b483e0d082b9::t_5774ddc0ac765b 26
+deploy/compose/README.md
+  s_82b483e0d082b9::t_05f9e35acfeb34 1-64
+src/handlers/admin/recordings.rs
+  s_82b483e0d082b9::t_0803b3d7494a0f 35-54
+  s_82b483e0d082b9::t_773c3098d91c6a 86-109
+  s_82b483e0d082b9::t_988bc58f6184ce 117-127
+src/upload/s3.rs
+  s_82b483e0d082b9::t_f177bc4cb112e7 24-33,41-46,48
+ui/src/components/ui/command.tsx
+  s_82b483e0d082b9::t_364293a03fca8b 1-93
+ui/src/components/ui/dialog.tsx
+  s_82b483e0d082b9::t_6ea7931ced2214 1-117
+scripts/run-sessions.sh
+  s_82b483e0d082b9::t_8809bd3603924b 1-49,51-105
+  s_82b483e0d082b9::t_c83f952ffcd1d8 50
+ui/package-lock.json
+  s_82b483e0d082b9::t_4e19d2c1aa9358 16-17,20,23,25,766-803,815-1661,1664-1679,1682-1685,1687-1702,1705-1708,1711-1725,1728-1731,1734-1735,1752-1755,1758-1766,1783-1786,1788-1800,1803-1805,1810-1812,1816-1819,1821-1831,1834-1836,1841-1843,1847-1872,1891,1893-1894,1897,1914-1950,1952-1954,1965-1968,1971-1976,1993-1996,1999-2006,2010-2012,2017-2019,2023-2026,2029-2040,2057-2060,2063-2065,2082-2085,2088-2094,2111-2114,2117-2123,2140-2143,2146-2158,2175-2178,2190-2193,2195-2199,2210-2213,2216,2228-2231,2234-2238,2240-2250,2262-2264,2277-2294,2296-2298,2310-2312,2315,2327-2355,3230-3245,3869-3945
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "1bf43a85f59534a7a7e83b426401d09105bffd85",
+  "prompts": {},
+  "sessions": {
+    "s_82b483e0d082b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b29db87-f7e3-4856-a612-a892ccabe4a2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "vasanth <itsparser@gmail.com>"
+    },
+    "s_acbc5f182caba2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b8e3ae0f-8968-4224-a285-241b4daa62bd",
+        "model": "claude-fable-5"
+      },
+      "human_author": "vasanth <itsparser@gmail.com>"
+    }
+  }
+}
