@@ -187,6 +187,13 @@ export interface RecordingInfo {
   videoBytes: number;
   log: boolean;
   modified: string;
+  /** Session metadata from the `{id}.json` sidecar (may be empty for
+   *  recordings captured before the sidecar was written). */
+  browser: string;
+  version: string;
+  platform: string;
+  owner: string | null;
+  started: string;
 }
 
 export async function fetchRecordings(): Promise<RecordingInfo[]> {

@@ -32,6 +32,26 @@ pub struct Recording {
     pub log: bool,
     /// RFC3339 mtime of the newest artifact for this session.
     pub modified: String,
+    /// Session metadata from the `{id}.json` sidecar (empty when the
+    /// sidecar is absent, e.g. recordings from before it was written).
+    pub browser: String,
+    pub version: String,
+    pub platform: String,
+    pub owner: Option<String>,
+    /// RFC3339 session start time from the sidecar.
+    pub started: String,
+}
+
+/// Shape of the `{id}.json` metadata sidecar written by the session
+/// cancel hook (see handlers/create.rs).
+#[derive(Default, serde::Deserialize)]
+#[serde(default)]
+struct Sidecar {
+    browser: String,
+    version: String,
+    platform: String,
+    owner: Option<String>,
+    started: String,
 }
 
 pub async fn list(_admin: RequireAdmin, State(state): State<AppState>) -> Json<Vec<Recording>> {
@@ -63,29 +83,46 @@ pub async fn list(_admin: RequireAdmin, State(state): State<AppState>) -> Json<V
     // Carry the raw mtime so ordering is by real (sub-second) time, not
     // the second-truncated display string — otherwise recordings
     // finalized in the same second would fall back to id order.
-    let mut out: Vec<(Option<SystemTime>, Recording)> = by_id
-        .into_iter()
-        .map(|(id, (video, bytes, log, mtime))| {
-            let modified = mtime
-                .map(|t| humantime::format_rfc3339_seconds(t).to_string())
-                .unwrap_or_default();
-            (
-                mtime,
-                Recording {
-                    id,
-                    video,
-                    video_bytes: bytes,
-                    log,
-                    modified,
-                },
-            )
-        })
-        .collect();
+    let video_dir = state.args.video_output_dir.clone();
+    let mut out: Vec<(Option<SystemTime>, Recording)> = Vec::with_capacity(by_id.len());
+    for (id, (video, bytes, log, mtime)) in by_id {
+        let modified = mtime
+            .map(|t| humantime::format_rfc3339_seconds(t).to_string())
+            .unwrap_or_default();
+        // Merge the `{id}.json` sidecar when present (best-effort).
+        let sc = read_sidecar(&video_dir, &id).await;
+        out.push((
+            mtime,
+            Recording {
+                id,
+                video,
+                video_bytes: bytes,
+                log,
+                modified,
+                browser: sc.browser,
+                version: sc.version,
+                platform: sc.platform,
+                owner: sc.owner,
+                started: sc.started,
+            },
+        ));
+    }
     // Newest first; `None` (no mtime) sorts last. `Reverse` over the
     // Option flips the ascending sort — None outranks every Some under
     // Reverse, so it lands at the end.
     out.sort_by_key(|(mtime, _)| std::cmp::Reverse(*mtime));
     Json(out.into_iter().map(|(_, r)| r).collect::<Vec<_>>())
+}
+
+/// Read and parse the `{id}.json` metadata sidecar from `video_dir`.
+/// Returns defaults (all empty) when it's absent or unparseable, so
+/// recordings without a sidecar still list — just with blank metadata.
+async fn read_sidecar(video_dir: &str, id: &str) -> Sidecar {
+    let path = std::path::Path::new(video_dir).join(format!("{id}.json"));
+    match tokio::fs::read(&path).await {
+        Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_default(),
+        Err(_) => Sidecar::default(),
+    }
 }
 
 fn bump(slot: &mut Option<SystemTime>, meta: &std::fs::Metadata) {

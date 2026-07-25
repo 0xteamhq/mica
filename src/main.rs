@@ -94,6 +94,7 @@ async fn main() -> anyhow::Result<()> {
                     None
                 })
                 .with_disable_privileged(args.disable_privileged)
+                .with_video_dir(Some(args.video_output_dir.clone()))
                 .with_log_conf(&args.log_conf);
             Arc::new(b)
         }
@@ -118,7 +119,13 @@ async fn main() -> anyhow::Result<()> {
 
     let state = AppState::new(config, args.clone(), backend).with_metrics(prom);
 
-    if let Some(s3) = S3Uploader::from_args(&args.s3_bucket, &args.s3_region, &args.s3_prefix).await
+    if let Some(s3) = S3Uploader::from_args(
+        &args.s3_bucket,
+        &args.s3_region,
+        &args.s3_prefix,
+        args.s3_force_path_style,
+    )
+    .await
     {
         let listener = Arc::new(UploadListener::new(Arc::new(s3)));
         state.events.add_file_listener(listener).await;

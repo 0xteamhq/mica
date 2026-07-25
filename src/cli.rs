@@ -108,6 +108,13 @@ pub struct Args {
     #[arg(long, default_value = "", env = "MICA_S3_PREFIX")]
     pub s3_prefix: String,
 
+    /// Force path-style S3 addressing (`endpoint/bucket/key` instead of
+    /// the virtual-host `bucket.endpoint/key`). Required for
+    /// S3-compatible stores like MinIO / Ceph. The endpoint URL itself
+    /// is set via the standard `AWS_ENDPOINT_URL_S3` env var.
+    #[arg(long, default_value_t = false, env = "MICA_S3_FORCE_PATH_STYLE")]
+    pub s3_force_path_style: bool,
+
     /// Min idle warm-pool size per browser key. 0 disables the pool.
     #[arg(long, default_value_t = 0)]
     pub warm_pool_min: u32,

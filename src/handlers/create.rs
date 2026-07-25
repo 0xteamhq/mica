@@ -227,6 +227,15 @@ async fn create_session_inner(
         .ok_or_else(|| WdError::session_not_created("upstream response missing sessionId"))?
         .to_string();
 
+    // Platform reported by the upstream driver (chromedriver etc.) —
+    // "linux" / "mac" / "windows". Recorded in the artifact metadata
+    // sidecar so the dashboard can filter recordings by OS.
+    let platform = upstream_resp
+        .pointer("/value/capabilities/platformName")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
     // Disarm the guard — ownership of the stopper moves into the
     // session's cancel hook. From here on the session map owns
     // teardown.
@@ -244,10 +253,14 @@ async fn create_session_inner(
     let http = state.http.clone();
     let upstream_for_cancel = upstream.clone();
     let session_id_for_cancel = session_id.clone();
+    let request_id_for_cancel = request_id.clone();
     let events_for_cancel = state.events.clone();
     let browser_name_for_cancel = browser_name.clone();
     let version_for_cancel = version.clone();
+    let owner_for_cancel = owner.clone();
+    let platform_for_cancel = platform.clone();
     let session_started = SystemTime::now();
+    let started_rfc3339 = humantime::format_rfc3339_seconds(session_started).to_string();
     let video_dir = state.args.video_output_dir.clone();
     let log_dir = state.args.log_output_dir.clone();
     let delete_timeout = state.args.session_delete_timeout;
@@ -266,9 +279,13 @@ async fn create_session_inner(
         let http = http.clone();
         let upstream = upstream_for_cancel.clone();
         let sid = session_id_for_cancel.clone();
+        let request_id = request_id_for_cancel.clone();
         let events = events_for_cancel.clone();
         let browser = browser_name_for_cancel.clone();
         let version = version_for_cancel.clone();
+        let owner = owner_for_cancel.clone();
+        let platform = platform_for_cancel.clone();
+        let started_rfc3339 = started_rfc3339.clone();
         let video_dir = video_dir.clone();
         let log_dir = log_dir.clone();
         tokio::spawn(async move {
@@ -278,6 +295,45 @@ async fn create_session_inner(
                 .send()
                 .await;
             stopper.stop().await;
+            // A self-recording browser image names its .mp4 by the
+            // request id (the upstream session id isn't known at
+            // container start). Now that the container has stopped and
+            // ffmpeg has finalized the file, rename it to
+            // `{session_id}.mp4` so pickup, /video, and the UI all stay
+            // keyed on the session id.
+            let recorded = PathBuf::from(&video_dir).join(format!("{request_id}.mp4"));
+            if tokio::fs::metadata(&recorded).await.is_ok() {
+                let target = PathBuf::from(&video_dir).join(format!("{sid}.mp4"));
+                if let Err(e) = tokio::fs::rename(&recorded, &target).await {
+                    tracing::warn!(error = %e, %request_id, %sid, "rename recording failed");
+                }
+            }
+            // Metadata sidecar: mica keeps no session history, so record
+            // the browser/version/platform/owner/started alongside the
+            // artifact for the dashboard's Recordings filters. Written
+            // only when an artifact exists, so it never litters the dir.
+            let has_video =
+                tokio::fs::metadata(PathBuf::from(&video_dir).join(format!("{sid}.mp4")))
+                    .await
+                    .is_ok();
+            let has_log = tokio::fs::metadata(PathBuf::from(&log_dir).join(format!("{sid}.log")))
+                .await
+                .is_ok();
+            if has_video || has_log {
+                let meta = serde_json::json!({
+                    "browser": browser,
+                    "version": version,
+                    "platform": platform,
+                    "owner": owner,
+                    "started": started_rfc3339,
+                });
+                let meta_path = PathBuf::from(&video_dir).join(format!("{sid}.json"));
+                if let Ok(bytes) = serde_json::to_vec_pretty(&meta)
+                    && let Err(e) = tokio::fs::write(&meta_path, bytes).await
+                {
+                    tracing::warn!(error = %e, %sid, "write recording metadata failed");
+                }
+            }
             // T44 — for each finalized artifact: ask the plugin
             // chain first (if any), then either emit to the EventBus
             // (Keep → S3Uploader runs) or short-circuit per the

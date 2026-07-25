@@ -21,7 +21,16 @@ pub struct S3Uploader {
 impl S3Uploader {
     /// Build an uploader from CLI args. Returns `None` when bucket is
     /// empty so wiring code can `if let Some(u) = ...`.
-    pub async fn from_args(bucket: &str, region: &str, prefix: &str) -> Option<Self> {
+    ///
+    /// `force_path_style` addresses buckets as `endpoint/bucket/key`
+    /// (needed for MinIO / Ceph); the endpoint URL comes from the SDK's
+    /// standard `AWS_ENDPOINT_URL_S3` env var.
+    pub async fn from_args(
+        bucket: &str,
+        region: &str,
+        prefix: &str,
+        force_path_style: bool,
+    ) -> Option<Self> {
         if bucket.is_empty() {
             return None;
         }
@@ -29,9 +38,14 @@ impl S3Uploader {
         if !region.is_empty() {
             loader = loader.region(aws_sdk_s3::config::Region::new(region.to_string()));
         }
-        let conf = loader.load().await;
+        let shared = loader.load().await;
+        // Build an S3-specific config from the shared one so path-style
+        // addressing can be forced for non-AWS, S3-compatible stores.
+        let conf = aws_sdk_s3::config::Builder::from(&shared)
+            .force_path_style(force_path_style)
+            .build();
         Some(Self {
-            client: Client::new(&conf),
+            client: Client::from_conf(conf),
             bucket: bucket.to_string(),
             prefix: prefix.to_string(),
         })

@@ -1,0 +1,19 @@
+{
+  "lightpanda": {
+    "default": "nightly",
+    "versions": {
+      "nightly": {
+        "image": "ghcr.io/0xteamhq/lightpanda:nightly",
+        "port": "4444",
+        "path": "",
+        "env": ["TZ=UTC"]
+      }
+    }
+  },
+  "chrome": {
+    "default": "125.0",
+    "versions": {
+      "125.0": {"image": "selenoid/chrome:125.0", "port": "4444", "path": "/"}
+    }
+  }
+}

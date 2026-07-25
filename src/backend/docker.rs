@@ -51,6 +51,10 @@ pub struct DockerBackend {
     /// T50 — when set, every container's stdout/stderr stream is
     /// captured to `<save_all_logs_dir>/<container_id>.log`.
     save_all_logs_dir: Option<String>,
+    /// Host video dir bind-mounted into a browser container at `/video`
+    /// when `enableVideo` is set, so a self-recording image can write
+    /// its `.mp4` where mica picks it up. `None` disables the mount.
+    video_dir: Option<String>,
     /// When `true`, mica drops the privileged flag on every
     /// container it creates.
     disable_privileged: bool,
@@ -73,6 +77,7 @@ impl DockerBackend {
             service_startup_timeout: Duration::from_secs(30),
             stop_timeout_secs: 10,
             save_all_logs_dir: None,
+            video_dir: None,
             disable_privileged: false,
             log_config: None,
         })
@@ -105,6 +110,13 @@ impl DockerBackend {
     /// `<dir>/<container_id>.log`. Pass `None` to disable.
     pub fn with_save_all_logs(mut self, dir: Option<String>) -> Self {
         self.save_all_logs_dir = dir.filter(|d| !d.is_empty());
+        self
+    }
+
+    /// Host video dir bind-mounted at `/video` for self-recording
+    /// browser images (see `video_dir`). Pass `None` to disable.
+    pub fn with_video_dir(mut self, dir: Option<String>) -> Self {
+        self.video_dir = dir.filter(|d| !d.is_empty());
         self
     }
 
@@ -221,10 +233,19 @@ impl Backend for DockerBackend {
         } else {
             Some(browser.tmpfs.clone())
         };
-        let binds = if browser.volumes.is_empty() {
+        // Start from browsers.json volumes, then bind-mount the host
+        // video dir at /video when this session records, so a
+        // self-recording image writes its .mp4 where mica picks it up.
+        let mut bind_list = browser.volumes.clone();
+        if caps.enable_video
+            && let Some(dir) = &self.video_dir
+        {
+            bind_list.push(format!("{dir}:/video"));
+        }
+        let binds = if bind_list.is_empty() {
             None
         } else {
-            Some(browser.volumes.clone())
+            Some(bind_list)
         };
         let sysctls = if browser.sysctl.is_empty() {
             None
@@ -333,6 +354,11 @@ impl Backend for DockerBackend {
         }
         if caps.enable_video {
             env.push("ENABLE_VIDEO=true".to_string());
+            // The upstream session id isn't known until after the
+            // container starts, so a self-recording image names its
+            // file by the request id; the cancel hook renames it to
+            // `{session_id}.mp4` once finalized.
+            env.push(format!("FILE_NAME={}", params.request_id));
         }
         if let Some(size) = &video_size {
             env.push(format!("VIDEO_SIZE={size}"));
