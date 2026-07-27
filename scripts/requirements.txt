@@ -1,0 +1,7 @@
+# Dependencies for scripts/run_sessions.py.
+#
+# Single source of truth for the version floor. 4.26 is the first release
+# shipping selenium/webdriver/remote/client_config.py and the matching
+# Remote(client_config=...) parameter, which run_sessions.py uses to bound
+# the session-create wait.
+selenium>=4.26
