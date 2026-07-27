@@ -1,0 +1,64 @@
+---
+title: "Warm pool"
+description: "Sub-second session starts by keeping pre-started browsers ready."
+icon: "fire"
+---
+
+Cold-starting a browser container costs seconds — image setup, process boot,
+WebDriver port readiness. The warm pool eliminates that from the client's
+critical path by keeping browsers **pre-started and waiting**.
+
+## Enable
+
+```bash
+mica --conf browsers.json \
+  --warm-pool-min 4 \
+  --warm-pool-max 16 \
+  --warm-pool-idle-ttl 5m
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--warm-pool-min` | `0` | Minimum idle browsers kept per pool key. `0` disables the pool. |
+| `--warm-pool-max` | `16` | Maximum idle browsers per key. |
+| `--warm-pool-idle-ttl` | `5m` | Idle entries older than this are evicted. |
+
+## How pooling is keyed
+
+Pools are maintained per `(image, screen_resolution, env_hash)` tuple. A
+create request whose capabilities match a pooled browser gets it instantly;
+anything else falls through to a normal cold start — correctness never
+depends on the pool.
+
+<Note>
+  Requests that customize the container environment (custom `env`,
+  resolution, etc.) form their own pool keys. Keep your common capability
+  shapes consistent to maximize hit rate.
+</Note>
+
+## Pairing with the right image
+
+The pool shines with a small image. mica's
+[`chrome-headless-shell`](/guides/browser-images) image (~80 MB vs ~300 MB
+for full Chrome) was built for exactly this pairing: small pulls, fast
+boots, cheap pool replenishment. Note that it ships CDP only — see the
+caveat on that page before registering it in `browsers.json`.
+
+## Sizing guidance
+
+- `--warm-pool-min` ≈ your steady-state session *arrival* burst, not total
+  concurrency — the pool only needs to cover the starts, and it replenishes
+  in the background.
+- Pooled browsers consume RAM while idle; budget them like live sessions.
+- `--warm-pool-idle-ttl` is applied **lazily, not by a background reaper**.
+  Entries older than the TTL are dropped when a create arrives for that same
+  pool key — so during a complete traffic trough nothing reclaims them and
+  warm containers hold their memory indefinitely. Size `--warm-pool-min`
+  against memory you can afford to have pinned around the clock, not against
+  peak-hour demand you expect to decay.
+
+## Interaction with limits
+
+Warm browsers do **not** consume queue slots — the `--limit` cap applies to
+client sessions. A pool hit simply skips the start latency; the permit
+accounting is identical to a cold start.

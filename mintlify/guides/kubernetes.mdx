@@ -1,0 +1,126 @@
+---
+title: "Deploy on Kubernetes"
+description: "Install mica with the Helm chart: values, RBAC scopes, probes, and drain behavior."
+icon: "dharmachakra"
+---
+
+The Helm chart at `deploy/k8s/charts/mica` deploys mica's HTTP tier — the
+Deployment, Service, RBAC, probes, config, and artifact storage.
+
+<Warning>
+  **`backend.mode` does not pass `--backend` to mica.** The chart value only
+  decides which RBAC verbs are granted and whether the node's Docker socket
+  is hostPath-mounted — the Deployment template renders no `--backend` flag.
+  So `backend.mode: k8s` (the chart default) grants the RBAC but still leaves
+  mica on its default Docker backend, with no socket mounted, and every
+  session create fails. The chart's `NOTES.txt` blames an unshipped backend;
+  that note is stale — [`--backend k8s`](/concepts/backends) is implemented
+  and works. Pass it yourself via `extraArgs`.
+</Warning>
+
+## Install
+
+```bash
+helm install mica ./deploy/k8s/charts/mica \
+  --namespace mica --create-namespace \
+  -f deploy/k8s/examples/values-production.yaml \
+  --set backend.mode=k8s \
+  --set 'extraArgs={--backend=k8s,--k8s-namespace=mica}'
+```
+
+`backend.mode: k8s` grants the RBAC; `extraArgs` is what actually selects the
+backend. Keep the two in sync — RBAC without the flag (or the flag without
+RBAC) fails at session create.
+
+<Warning>
+  **`--k8s-namespace` must be passed too, and must match the release
+  namespace.** The chart renders neither the flag nor `MICA_K8S_NAMESPACE`,
+  so mica falls back to clap's default of `default` and creates session pods
+  *there* — while the chart's `Role`/`RoleBinding` exist only in the release
+  namespace. The result is a `403` on every session create. Set
+  `--k8s-namespace=<release namespace>` in `extraArgs` as above (or, if you
+  really want pods in `default`, add it to `rbac.extraNamespaces`).
+</Warning>
+
+Two example value files ship with the chart:
+
+- `values-basic.yaml` — single replica, dev cluster.
+- `values-production.yaml` — 3 replicas, ingress + TLS, warm pool, S3.
+
+## Common values
+
+| Key | Default | What it does |
+|---|---|---|
+| `image.repository` | `ghcr.io/0xteamhq/mica` | Image repo |
+| `image.tag` | chart `appVersion` | Image tag |
+| `replicaCount` | `3` | Replicas (anti-affinity by hostname) |
+| `backend.mode` | `k8s` | RBAC/socket wiring only — `k8s` grants pod/service RBAC, `docker` hostPath-mounts the node's Docker socket. Does **not** render `--backend`; pass that in `extraArgs`. |
+| `mica.limit` | `5` | Max parallel sessions per replica |
+| `mica.warmPool.min` | `0` | Warm pool size; `> 0` enables |
+| `s3.bucket` | empty | Enable S3 artifact upload |
+| `rbac.scope` | `namespace` | `namespace` or `cluster` |
+| `rbac.extraNamespaces` | `[]` | Extra namespaces to grant the Role in |
+| `ingress.enabled` | `false` | Toggle Ingress |
+| `service.sessionAffinity` | `ClientIP` | Pin a client to one replica (see multi-replica note) |
+| `persistence.video.type` | `emptyDir` | `emptyDir` / `pvc` / `hostPath` |
+
+See `values.yaml` in the chart for the full surface.
+
+## RBAC
+
+The chart provisions either a namespace-scoped `Role` + `RoleBinding`
+(replicated to `rbac.extraNamespaces`) or a `ClusterRole` +
+`ClusterRoleBinding` (`rbac.scope=cluster`). Verbs granted:
+
+| Resource | Verbs | Why |
+|---|---|---|
+| `pods` | create, delete, get, list, watch | spawn / reap browser pods |
+| `pods/log` | get | tail container logs |
+| `services` | create, delete, get | per-session DNS handle |
+| `configmaps` | get | mount `browsers.json` |
+| `events` | create | Kubernetes event emission |
+
+## Isolation via RuntimeClass
+
+`--k8s-runtime-class` applies [gVisor or Kata isolation](/concepts/isolation)
+to session pods; the named `RuntimeClass` (`gvisor` or `kata`) must already
+exist in the cluster. The chart has **no dedicated value** for it — pass it
+through `extraArgs`:
+
+```yaml
+extraArgs:
+  - --backend=k8s
+  - --k8s-runtime-class=gvisor
+```
+
+An explicit `--k8s-runtime-class` always wins over the class inferred from
+`--isolation`.
+
+## Multi-replica session ownership
+
+With `replicaCount > 1`, a session is bound to the replica that created it.
+Two ways to route follow-up traffic correctly:
+
+1. **Service affinity (chart default)** — `sessionAffinity: ClientIP` keeps a
+   client on the replica it started with.
+2. **Ingress by owner label** — every session pod is labeled
+   `mica/owner=<replica_id>` (set `--replica-id` from a downward-API field),
+   so nginx-ingress / Traefik / ALB / Istio configs can route deterministically.
+   Reference configs live in `deploy/routing/`.
+
+For multi-*cluster* or multi-*region* fleets, put [router mode](/guides/router)
+in front instead.
+
+## Drain and termination
+
+`terminationGracePeriodSeconds` should exceed mica's `--graceful-period`.
+The chart defaults to **330s** (mica's 300s default + 30s headroom) so
+in-flight sessions drain before the kubelet sends SIGKILL.
+
+## Rendering without Helm
+
+```bash
+helm template mica ./deploy/k8s/charts/mica \
+  -n mica -f deploy/k8s/examples/values-production.yaml > mica.yaml
+kubectl apply -f mica.yaml
+```

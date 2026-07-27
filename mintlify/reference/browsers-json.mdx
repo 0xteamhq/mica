@@ -1,0 +1,78 @@
+---
+title: "browsers.json"
+description: "The browser registry schema: images, versions, and per-browser container settings."
+icon: "file-code"
+---
+
+`browsers.json` (path via `--conf`) declares which browsers the grid offers.
+It hot-reloads on SIGHUP — or `POST /admin/api/config/reload` — with zero
+downtime.
+
+## Shape
+
+Top level maps **browser name** → version set:
+
+```json
+{
+  "chrome": {
+    "default": "126.0",
+    "versions": {
+      "126.0": {
+        "image": "selenoid/chrome:126.0",
+        "port": "4444",
+        "path": "",
+        "shmSize": 268435456
+      },
+      "125.0": {
+        "image": "selenoid/chrome:125.0",
+        "port": "4444",
+        "path": ""
+      }
+    }
+  },
+  "lightpanda": {
+    "default": "nightly",
+    "versions": {
+      "nightly": {
+        "image": "ghcr.io/0xteamhq/lightpanda:nightly",
+        "port": "4444",
+        "path": ""
+      }
+    }
+  }
+}
+```
+
+A create request selects with `browserName` and (optionally)
+`browserVersion`; an omitted version uses `default`.
+
+## Per-version fields
+
+| Field | Type | Notes |
+|---|---|---|
+| `image` | string | **Required.** Container image. Must be a string — the legacy Selenoid driver-mode array form is not supported. |
+| `port` | string | Container port the WebDriver server listens on. Optional — defaults to `"4444"`. |
+| `path` | string | URL path prefix of the WebDriver server. mica builds the upstream as `host:port + path` and appends `/session`, so `"/"` yields a doubled slash (`//session`). Prefer `""` for servers at the root — chromedriver tolerates the doubled slash (the repo's own fixtures use `"/"`), but stricter routers such as the [Lightpanda bridge](/guides/browser-images) reject it. |
+| `tmpfs` | object | tmpfs mounts, `{"/tmp": "size=512m"}`. |
+| `volumes` | string[] | Bind mounts, Docker `-v` syntax. |
+| `env` | string[] | Environment variables, `KEY=value`. |
+| `hosts` | string[] | Extra `/etc/hosts` entries, `host:ip` (merged with per-session `hostsEntries`). |
+| `shmSize` | number | `/dev/shm` bytes. Defaults to 2 GiB on the Docker backend. |
+| `mem` | string | Memory limit override for this browser (e.g. `"2g"`). |
+| `cpu` | string | CPU limit override for this browser (e.g. `"1.5"`). |
+| `labels` | object | Container labels. |
+| `sysctl` | object | Sysctls for the container. |
+| `publishAllPorts` | bool | Publish all exposed ports. |
+
+Per-browser `mem` / `cpu` override the server-wide `--memory` / `--cpu`
+defaults.
+
+## Reload semantics
+
+- Edit the file, then `kill -HUP <pid>` (or use the
+  [admin API](/guides/admin)). The registry is swapped atomically; in-flight
+  sessions are untouched.
+- The admin API edits the file as **raw bytes** — the file on disk stays the
+  single source of truth, and unknown fields survive round-trips.
+- An invalid file at reload time is rejected; the previous registry stays
+  active.

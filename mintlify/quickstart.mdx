@@ -1,0 +1,186 @@
+---
+title: "Quickstart"
+description: "Run mica with Docker, Kubernetes, or from source, then create your first browser session."
+icon: "rocket"
+---
+
+## Run mica
+
+<Tabs>
+  <Tab title="Docker">
+    mica needs the Docker socket to launch browser containers, a
+    `browsers.json` registry, and (optionally) directories for video and logs.
+
+    Create those first — Docker silently creates a *directory* for any bind
+    source that doesn't exist, so a missing `browsers.json` becomes a folder
+    and mica fails to load its registry:
+
+    ```bash
+    mkdir -p video logs
+    # The image runs as nonroot (uid 65532) and writes artifacts itself.
+    sudo chown -R 65532:65532 video logs
+    cat > browsers.json <<'JSON'
+    {
+      "chrome": {
+        "default": "126.0",
+        "versions": {
+          "126.0": {
+            "image": "selenoid/chrome:126.0",
+            "port": "4444",
+            "path": ""
+          }
+        }
+      }
+    }
+    JSON
+    ```
+
+    Then run it:
+
+    ```bash
+    docker run --rm --network host \
+      --group-add "$(stat -c '%g' /var/run/docker.sock)" \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      -v $PWD/browsers.json:/etc/mica/browsers.json:ro \
+      -v $PWD/video:$PWD/video \
+      -v $PWD/logs:$PWD/logs \
+      ghcr.io/0xteamhq/mica:latest \
+      --conf /etc/mica/browsers.json \
+      --video-output-dir $PWD/video \
+      --log-output-dir $PWD/logs
+    ```
+
+    mica runs in the foreground. From another shell:
+
+    ```bash
+    curl http://localhost:4444/ping
+    ```
+
+    <Warning>
+      **Linux recipe.** `--network host` is required because mica dials its
+      sibling browser containers at `127.0.0.1:<published port>` — from
+      inside its own network namespace it cannot reach them, and every create
+      times out. `--group-add` lets the image's `nonroot` user read the
+      Docker socket. On Docker Desktop / OrbStack, run the mica binary on the
+      host instead (see the "From source" tab) — host networking there does
+      not bridge the same way. Details in the
+      [Docker guide](/guides/docker).
+    </Warning>
+
+    <Warning>
+      Note that the artifact dirs above are mounted at the **same path on
+      both sides** (`$PWD/video:$PWD/video`). That is required when mica
+      itself runs in a container: mica passes `--video-output-dir` verbatim
+      as the host side of the recorder container's bind mount, and the host
+      Docker daemon resolves it against the host filesystem. The conventional
+      short form (`-v $PWD/video:/video` with `--video-output-dir /video`)
+      splits the two apart, and recordings silently never reach the
+      Recordings page or S3.
+    </Warning>
+
+    That registry is the minimum: one browser, one version, pointing at a
+    WebDriver-speaking image. See the
+    [browsers.json reference](/reference/browsers-json) for the full schema,
+    and [browser images](/guides/browser-images) for mica's own lightweight
+    images.
+  </Tab>
+  <Tab title="Kubernetes (Helm)">
+    ```bash
+    helm install mica ./deploy/k8s/charts/mica \
+      --namespace mica --create-namespace \
+      -f deploy/k8s/examples/values-production.yaml \
+      --set backend.mode=k8s \
+      --set 'extraArgs={--backend=k8s,--k8s-namespace=mica}'
+    ```
+
+    The chart provisions RBAC for the Kubernetes backend, health probes,
+    optional ingress, and persistence for video artifacts.
+
+    Both `extraArgs` entries are required: the chart's `backend.mode` value
+    only wires RBAC, so `--backend` and `--k8s-namespace` must be passed
+    explicitly or every session create fails. The
+    [Kubernetes guide](/guides/kubernetes) explains why.
+  </Tab>
+  <Tab title="From source">
+    Requires Rust 1.88+ (edition 2024):
+
+    ```bash
+    git clone https://github.com/0xteamhq/mica
+    cd mica
+    cargo run -- --conf tests/fixtures/browsers.json
+    ```
+  </Tab>
+</Tabs>
+
+## Create a session
+
+<Tabs>
+  <Tab title="curl">
+    ```bash
+    curl -X POST http://localhost:4444/wd/hub/session \
+      -H 'Content-Type: application/json' \
+      -d '{"capabilities":{"alwaysMatch":{"browserName":"chrome"}}}'
+    ```
+  </Tab>
+  <Tab title="Selenium (Python)">
+    ```python
+    from selenium import webdriver
+
+    opts = webdriver.ChromeOptions()
+    opts.set_capability("mica:options", {"enableVNC": True, "enableVideo": True})
+
+    driver = webdriver.Remote("http://localhost:4444/wd/hub", options=opts)
+    driver.get("https://example.com")
+    driver.quit()
+    ```
+  </Tab>
+  <Tab title="WebdriverIO (Node)">
+    ```js
+    import { remote } from "webdriverio";
+
+    const browser = await remote({
+      path: "/wd/hub",
+      hostname: "localhost",
+      port: 4444,
+      capabilities: {
+        browserName: "chrome",
+        "mica:options": { enableVNC: true, enableVideo: true },
+      },
+    });
+
+    await browser.url("https://example.com");
+    await browser.deleteSession();
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  `mica:options` is mica's vendor capability block — VNC, video recording,
+  screen resolution, per-session timeouts, and more. See the
+  [capabilities reference](/reference/capabilities).
+</Note>
+
+## Verify
+
+```bash
+curl http://localhost:4444/status     # capacity, browsers map, live sessions
+curl http://localhost:4444/healthz    # liveness
+curl http://localhost:4444/metrics    # Prometheus text format
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Warm pool" icon="fire" href="/guides/warm-pool">
+    Sub-second session starts with pre-warmed browsers.
+  </Card>
+  <Card title="Video, logs & S3" icon="film" href="/guides/artifacts">
+    Record sessions and ship artifacts to object storage.
+  </Card>
+  <Card title="Router mode" icon="route" href="/guides/router">
+    Scale beyond one node with the built-in stateless router.
+  </Card>
+  <Card title="Admin dashboard" icon="gauge-high" href="/guides/admin">
+    Live sessions, kill/drain, user and quota management at `/admin`.
+  </Card>
+</CardGroup>

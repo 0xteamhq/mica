@@ -71,7 +71,12 @@ pub struct Args {
     #[arg(long, default_value_t = false)]
     pub enable_file_upload: bool,
 
-    /// Disable the request queue (return 429 instead of blocking).
+    /// Disable the request queue: instead of blocking until a slot frees
+    /// up, fail the create immediately with the W3C error
+    /// `session not created` / `queue is full`.
+    // The HTTP status for that error comes from the usual `WdError`
+    // `IntoResponse` mapping in `error.rs` (500 today). Kept out of the doc
+    // comment so it stays out of `--help`.
     #[arg(long, default_value_t = false)]
     pub disable_queue: bool,
 

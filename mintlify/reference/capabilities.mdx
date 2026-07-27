@@ -1,0 +1,84 @@
+---
+title: "mica:options capabilities"
+description: "The vendor capability block: VNC, video, resolution, timeouts, networking, and metadata."
+icon: "sliders"
+---
+
+mica reads the standard W3C capabilities `browserName` and `browserVersion`
+plus a vendor block, `mica:options`, in `capabilities.alwaysMatch` (the
+legacy `desiredCapabilities` form is also accepted, with `version` mapped to
+`browserVersion`):
+
+```json
+{
+  "capabilities": {
+    "alwaysMatch": {
+      "browserName": "chrome",
+      "mica:options": {
+        "enableVNC": true,
+        "enableVideo": true,
+        "screenResolution": "1280x1024x24",
+        "sessionTimeout": "10m",
+        "name": "checkout-flow",
+        "env": ["TZ=UTC"]
+      }
+    }
+  }
+}
+```
+
+<Note>
+  Session placement is decided by `browserName` + `browserVersion` against
+  `browsers.json` only — no other capability affects it.
+
+  On the request side mica parses a non-standard `platform` capability and
+  passes it to plugins; the W3C-standard `platformName` you send is ignored.
+  The Platform column in the admin Recordings view comes from a different
+  place: the `platformName` the **upstream driver reports back** in the
+  create response, which mica records in the artifact metadata sidecar.
+</Note>
+
+## Observability & recording
+
+| Key | Type | Effect |
+|---|---|---|
+| `enableVNC` | bool | Expose a live VNC feed at `GET /vnc/{sessionId}` (WebSocket). Requires an image running a VNC server on `5900` |
+| `enableVideo` | bool | Record the session. Requires a **self-recording image** — mica starts no recorder sidecar; see [artifacts](/guides/artifacts) |
+| `enableLog` | bool | Capture container logs for this session |
+| `videoName` / `logName` | string | Parsed and passed to [plugins](/guides/plugins), but **they do not rename artifacts** — recordings are always `{sessionId}.mp4` and logs `{sessionId}.log` |
+| `videoFrameRate` | number | Forwarded to the recorder as `VIDEO_FRAME_RATE` |
+| `videoCodec` | string | Forwarded as `CODEC` |
+| `videoScreenSize` | string | Forwarded as `VIDEO_SIZE`; falls back to `screenResolution` |
+| `name` | string | Human-readable session name (shows in `/status` and the admin UI) |
+| `labels` | object | Parsed and passed to [plugins](/guides/plugins) only — **not** applied to the session container. Use the per-browser `labels` in [`browsers.json`](/reference/browsers-json) for real container labels, or `name` (stamped as the `name` label) |
+
+## Session behavior
+
+| Key | Type | Effect |
+|---|---|---|
+| `sessionTimeout` | duration string | Per-session idle timeout override (e.g. `"10m"`), clamped to `--max-timeout` |
+| `screenResolution` | string | `WxHxD`, e.g. `"1280x1024x24"` |
+| `timeZone` | string | Container timezone, e.g. `"Europe/Berlin"` |
+| `env` | string[] | Extra environment variables for the browser container |
+
+## Networking (Docker backend)
+
+| Key | Type | Effect |
+|---|---|---|
+| `containerHostname` | string | Container hostname |
+| `hostsEntries` | string[] | Extra `/etc/hosts` entries (`"host:ip"`), merged with the browser's `hosts` from `browsers.json` |
+| `dnsServers` | string[] | Per-session DNS servers |
+| `applicationContainers` | string[] | Container names to `--link` into the session |
+| `additionalNetworks` | string[] | Extra Docker networks attached post-create |
+
+## Artifacts
+
+| Key | Type | Effect |
+|---|---|---|
+| `s3KeyPattern` | string | Per-session S3 key template overriding `--s3-prefix`. Tokens: `$fileName`, `$fileNameWithoutExt`, `$fileExtension`, `$browserName`, `$browserVersion`, `$sessionId`, `$fileType`, `$date` |
+
+## Request headers
+
+| Header | Effect |
+|---|---|
+| `X-Mica-No-Wait: 1` | On `POST /wd/hub/session`: fail immediately (`500`, `session not created` / `queue is full`) instead of waiting in the queue |

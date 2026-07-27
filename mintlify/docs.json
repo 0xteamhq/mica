@@ -1,0 +1,60 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "mica",
+  "description": "A W3C-WebDriver-compatible browser grid in Rust. One binary, scales 0 to N.",
+  "colors": {
+    "primary": "#0F766E",
+    "light": "#2DD4BF",
+    "dark": "#0F766E"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["index", "quickstart"]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/backends",
+              "concepts/isolation"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/clients",
+              "guides/docker",
+              "guides/kubernetes",
+              "guides/router",
+              "guides/admin",
+              "guides/warm-pool",
+              "guides/artifacts",
+              "guides/browser-images",
+              "guides/plugins"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/browsers-json",
+              "reference/cli",
+              "reference/capabilities",
+              "reference/endpoints"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/0xteamhq/mica"
+    }
+  }
+}

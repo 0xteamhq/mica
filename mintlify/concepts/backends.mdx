@@ -1,0 +1,58 @@
+---
+title: "Backends"
+description: "Where browsers run: the Docker backend for single hosts, the Kubernetes backend for clusters."
+icon: "server"
+---
+
+A **backend** is the thing that knows how to *start* a browser for a session.
+mica ships two production backends behind one interface, selected with
+`--backend`:
+
+| Backend | Flag | Where browsers run |
+|---|---|---|
+| Docker (default) | `--backend docker` | Containers on the local Docker daemon (`/var/run/docker.sock`) |
+| Kubernetes | `--backend k8s` | Pods in a namespace, created via the Kubernetes API |
+
+## Docker backend
+
+The default. mica talks to the local Docker socket and creates one container
+per session, with:
+
+- `/dev/shm` sized at **2 GiB by default** (Chrome crashes under load with
+  the 64 MB Docker default; override per browser via `shmSize` in
+  `browsers.json`),
+- CPU / memory limits from `--cpu` / `--memory` or per-browser overrides,
+- custom networks (`--container-network`, plus per-session
+  `additionalNetworks`), `/etc/hosts` entries, DNS servers, tmpfs mounts, and
+  container links — all controllable via
+  [browsers.json](/reference/browsers-json) and
+  [mica:options](/reference/capabilities).
+
+## Kubernetes backend
+
+With `--backend k8s`, sessions are Pods. Key flags:
+
+- `--k8s-namespace` — where session pods live.
+- `--k8s-runtime-class` — sets `runtimeClassName` on session pods, which is
+  how [gVisor and Kata isolation](/concepts/isolation) are applied.
+- `--replica-id` — every pod is labeled `mica/owner=<id>` so ingress can
+  route session traffic back to the owning mica replica in multi-replica
+  deployments.
+
+The [Helm chart](/guides/kubernetes) provisions the RBAC this needs (pods,
+pods/log, services, configmaps, events).
+
+## Design note: backends only start
+
+The backend interface has one job: start a session. **Stopping is a
+per-session capability captured at start time**, not a method on the backend.
+This is deliberate — snapshot-based isolation targets (Firecracker, Kata)
+need to capture state when the sandbox starts, and this seam lets them
+compose cleanly. It also means new capabilities land in the start
+parameters or the started-session handle, keeping the surface small.
+
+<Note>
+  A `MockBackend` backs the test suite, so the full HTTP surface is tested
+  without Docker. Integration tests that genuinely need Docker are gated
+  behind `MICA_DOCKER_TESTS=1`.
+</Note>

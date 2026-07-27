@@ -1,0 +1,106 @@
+---
+title: "CLI & environment"
+description: "Every mica flag and its environment variable, grouped by concern."
+icon: "terminal"
+---
+
+All flags are optional; run `mica --help` for the authoritative list. Flags
+with an env var equivalent show it in parentheses.
+
+## Core
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--listen` (`MICA_LISTEN`) | `:4444` | Listen address |
+| `--conf` (`MICA_CONF`) | `config/browsers.json` | Browser registry — see [browsers.json](/reference/browsers-json) |
+| `--limit` | `5` | Max parallel sessions per replica |
+| `--timeout` | `60s` | Per-session idle timeout |
+| `--max-timeout` | `1h` | Cap for client-requested `mica:options.sessionTimeout`; higher asks are clamped |
+| `--service-startup-timeout` | `30s` | Wait for the browser's WebDriver port |
+| `--session-attempt-timeout` | `30s` | **Not currently wired** — the flag parses but nothing reads it. The real per-attempt bound is the hard-coded 60s HTTP client timeout, so setting this does not make creates fail faster |
+| `--session-delete-timeout` | `30s` | Budget for the upstream `DELETE /session/{id}` during teardown |
+| `--retry-count` | `1` | Upstream create retries on 5xx |
+| `--disable-queue` | off | Fail the create with `500` / `session not created` instead of blocking when full |
+| `--graceful-period` | `300s` | Drain window on SIGTERM/SIGINT |
+
+## Containers (Docker backend)
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--container-network` | `default` | Docker network for session containers |
+| `--cpu` / `--memory` | empty | Default per-session limits (empty = unlimited); per-browser overrides in `browsers.json` |
+| `--enable-file-upload` | off | Enable the per-session `/file` upload endpoint |
+| `--disable-privileged` | off | **Session containers run privileged unless you set this.** Pass it to drop full host device access (isolation drivers may override when they need it) |
+| `--log-conf` (`MICA_LOG_CONF`) | empty | Docker log driver JSON, e.g. `{"type":"json-file","config":{"max-size":"10m"}}` |
+
+## Backend & isolation
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--backend` (`MICA_BACKEND`) | `docker` | `docker` or `k8s` |
+| `--k8s-namespace` (`MICA_K8S_NAMESPACE`) | `default` | Namespace for session pods |
+| `--k8s-runtime-class` (`MICA_K8S_RUNTIME_CLASS`) | empty | RuntimeClass for session pods (`gvisor`, `kata`, …) |
+| `--replica-id` (`MICA_REPLICA_ID`) | per-process UUID | Stamped as `mica/owner=<id>` on every pod; set from a downward-API field in multi-replica deployments |
+| `--isolation` (`MICA_ISOLATION`) | `auto` | `runc` \| `gvisor` \| `kata` \| `firecracker` \| `cloud_hypervisor`. `auto` picks the highest-ranked *available* driver — on a KVM host that is one of the scaffolded microVM drivers, which map to no RuntimeClass. [Pin it explicitly](/concepts/isolation#automatic-selection) in production. |
+
+## Artifacts
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--video-output-dir` | `video` | Where recordings land. **Set an absolute path** — the value doubles as the host side of the recorder's bind mount, so the relative default is treated as a *named volume* and recordings silently vanish |
+| `--log-output-dir` | `logs` | Where session logs land |
+| `--save-all-logs` | off | Stream every container's output, not just `enableLog` sessions |
+| `--s3-bucket` (`MICA_S3_BUCKET`) | empty | Enable S3 upload — see [artifacts](/guides/artifacts) |
+| `--s3-region` (`MICA_S3_REGION`) | empty | Defaults to the AWS SDK chain |
+| `--s3-prefix` (`MICA_S3_PREFIX`) | empty | Key prefix for every object |
+| `--s3-force-path-style` (`MICA_S3_FORCE_PATH_STYLE`) | off | Required for MinIO / Ceph; endpoint via `AWS_ENDPOINT_URL_S3` |
+
+## Warm pool
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--warm-pool-min` | `0` | Min idle browsers per pool key; `0` disables |
+| `--warm-pool-max` | `16` | Max idle browsers per key |
+| `--warm-pool-idle-ttl` | `5m` | Eviction age for idle entries |
+
+## Auth & quotas
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--users` (`MICA_USERS`) | empty | htpasswd file (`name:hash[:admin]`); empty = open. Health, `/ping`, `/metrics`, `/openapi.yaml` stay unauthenticated |
+| `--quotas` (`MICA_QUOTAS`) | empty | JSON quota file `{"default": 0, "users": {"alice": 3}}`; `0` = unlimited |
+
+## Plugins
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--plugin-dir` (`MICA_PLUGIN_DIR`) | empty | Directory of `.wasm` components |
+| `--plugin-grants` (`MICA_PLUGIN_GRANTS`) | empty | `<plugin>=<cap>,...;<plugin>=...` capability grants |
+| `--plugin-config` (`MICA_PLUGIN_CONFIG`) | empty | Per-plugin TOML passed to `lifecycle.init` |
+| `--plugin-state-dir` (`MICA_PLUGIN_STATE_DIR`) | tmp | Durable dir for the `state` capability |
+| `--plugin-on-create-timeout` | `5s` | Budget for the on-create hook chain |
+| `--plugin-http-timeout` | `500ms` | Per-call budget on the proxy hot path |
+| `--plugin-shutdown-timeout` | `5s` | Per-plugin shutdown budget |
+
+See the [plugins guide](/guides/plugins) for semantics.
+
+## Router mode
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--router` (`MICA_ROUTER`) | off | Run as a stateless router; requires `--nodes`. Backend/isolation flags ignored |
+| `--nodes` (`MICA_NODES`) | `config/nodes.json` | Node registry; SIGHUP hot-reload; invalid at startup is fatal |
+| `--router-health-interval` (`MICA_ROUTER_HEALTH_INTERVAL`) | `5s` | Node `/status` poll cadence |
+| `--router-health-timeout` (`MICA_ROUTER_HEALTH_TIMEOUT`) | `5s` | Per-poll timeout |
+| `--router-unhealthy-threshold` (`MICA_ROUTER_UNHEALTHY_THRESHOLD`) | `2` | Consecutive failures before exclusion from placement |
+| `--router-max-attempts` (`MICA_ROUTER_MAX_ATTEMPTS`) | `3` | Distinct nodes tried per create |
+| `--router-create-timeout` (`MICA_ROUTER_CREATE_TIMEOUT`) | `5m` | Per-attempt forwarded-create budget (nodes may queue) |
+
+See the [router guide](/guides/router).
+
+## Signals
+
+| Signal | Effect |
+|---|---|
+| `SIGHUP` | Hot-reload `browsers.json`, users, quotas (and `nodes.json` in router mode) |
+| `SIGTERM` / `SIGINT` | Graceful shutdown: stop accepting, drain sessions within `--graceful-period` |

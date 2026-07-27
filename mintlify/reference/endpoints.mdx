@@ -1,0 +1,73 @@
+---
+title: "Endpoint map"
+description: "Every HTTP surface mica exposes, at a glance."
+icon: "map"
+---
+
+Full request/response schemas live in the OpenAPI spec — a mica **node**
+serves it at `GET /openapi.yaml`, and the source is
+[`deploy/openapi/mica.yaml`](https://github.com/0xteamhq/mica/blob/main/deploy/openapi/mica.yaml)
+in the repository. This page is the orientation map.
+
+## WebDriver wire
+
+What your test client talks to — standard W3C WebDriver:
+
+| Path | Purpose |
+|---|---|
+| `POST /wd/hub/session` | Create a session |
+| `* /wd/hub/session/{id}/...` | All session commands, proxied to the browser |
+| `DELETE /wd/hub/session/{id}` | End the session |
+| `POST /wd/hub/session/{id}/file` | File upload (requires `--enable-file-upload`) |
+| `GET /wd/hub/status` | Alias for `GET /status`, provided so Selenium 4 GridAdmin clients find it at the expected path. It returns **mica's** status shape (`total`/`used`/`queued`/`pending`/`draining`/`browsers`/`sessions`), **not** the W3C `{"value":{"ready":…}}` envelope — do not read `value.ready` from it |
+
+## Operations & observability
+
+| Path | Purpose |
+|---|---|
+| `GET /healthz` / `GET /readyz` | Liveness / readiness. `/readyz` is 503 while [draining](/guides/admin#drain-workflow) **and** when the node is fully booked (`used >= limit`, nothing pending) — so it means "can take a new session now", not "healthy". Read the [caveat](/guides/admin#drain-workflow) before using it as a K8s readiness probe |
+| `GET /metrics` | Prometheus text format |
+| `GET /status` | Capacity, browsers map, live sessions (aggregated fleet view in [router mode](/guides/router)) |
+| `GET /ping` | Uptime + queue counters (legacy probe) |
+| `GET /openapi.yaml` | The OpenAPI spec, served by the binary. **Nodes only** — router mode does not register this route |
+
+## Per-session auxiliary
+
+| Path | Purpose |
+|---|---|
+| `GET /vnc/{sessionId}` | Live VNC feed (WebSocket) — requires `enableVNC` |
+| `* /devtools/{sessionId}/...` | Reverse proxy to Chrome DevTools (CDP) |
+| `GET /session/{sessionId}/bidi` | WebDriver BiDi WebSocket relay |
+| `* /clipboard/{sessionId}` | Container clipboard relay |
+| `* /download/{sessionId}/...` | Container download-server relay |
+
+## Artifacts
+
+| Path | Purpose |
+|---|---|
+| `GET/DELETE /video/{name}` | Serve / delete a recording |
+| `GET/DELETE /logs/{name}` | Serve / delete session logs |
+
+## Admin
+
+The `/admin` dashboard and its API — see the [admin guide](/guides/admin):
+
+| Path | Purpose |
+|---|---|
+| `GET /admin` | Dashboard SPA |
+| `GET /admin/api/state` | Snapshot: capacity, sessions, config, health |
+| `GET /admin/api/events` | SSE: lifecycle events + 2s stats frames |
+| `DELETE /admin/api/sessions/{id}` | Kill a session |
+| `POST /admin/api/drain` | Toggle drain mode |
+| `POST /admin/api/config/reload` | Reload config (same as SIGHUP) |
+| `GET/PUT /admin/api/config/browsers` | Read / replace `browsers.json` as raw bytes (the file on disk stays the source of truth) |
+| `GET /admin/api/users` · `PUT/DELETE /admin/api/users/{name}` | User CRUD (htpasswd) |
+| `GET/PUT /admin/api/quotas` | Per-user quotas |
+| `GET /admin/api/recordings` | Browse recordings |
+
+## Authentication
+
+With `--users` set, everything above requires HTTP Basic auth **except**
+`/healthz`, `/readyz`, `/ping`, `/metrics`, and `/openapi.yaml` (kept open
+for probes and scrapers). Mutating admin routes additionally require the
+`admin` role.

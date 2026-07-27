@@ -1,0 +1,72 @@
+---
+title: "Isolation"
+description: "Choose the security/performance tradeoff per deployment: runc, gVisor, Kata, and (in development) microVMs."
+icon: "shield-halved"
+---
+
+Isolation is **orthogonal to backends** in mica: the same browser image runs
+under any isolation driver, and the driver decides how strongly each session
+is sandboxed from the host and from other sessions.
+
+## Drivers
+
+| Driver | Mechanism | Status |
+|---|---|---|
+| `runc` | Standard OCI container | ✅ shipped |
+| `gvisor` | User-space kernel (`runsc`), via K8s `runtimeClassName: gvisor` | ✅ shipped |
+| `kata` | Lightweight VM per pod, via K8s `runtimeClassName: kata` | ✅ shipped |
+| `firecracker` | Direct microVM lifecycle | 🚧 scaffolded |
+| `cloud_hypervisor` | Direct microVM lifecycle | 🚧 scaffolded |
+
+<Warning>
+  The Firecracker and Cloud Hypervisor drivers are **scaffolded, not yet
+  wired** — the architecture reserves their seams (including snapshot-based
+  session starts), but they are not usable in production today.
+</Warning>
+
+## Automatic selection
+
+At boot, mica probes the host — KVM availability, a `runsc` binary,
+`kata-runtime`, in-cluster Kubernetes — builds the set of drivers it
+considers available, and picks the highest-ranked one. The ranking is
+`firecracker` = `cloud_hypervisor` (4) > `kata` (3) > `gvisor` (2) >
+`runc` (1). Override explicitly:
+
+```bash
+mica --isolation gvisor     # runc | gvisor | kata | firecracker | cloud_hypervisor
+```
+
+<Warning>
+  **Pin `--isolation` explicitly in production; do not rely on `auto`.**
+  A visible `/dev/kvm` alone puts `firecracker` and `cloud_hypervisor` in
+  the available set, and they outrank everything else — so on any KVM host
+  `auto` selects a driver that is still [scaffolded](#drivers). Because
+  neither maps to a Kubernetes `runtimeClassName`, session pods are rendered
+  with **no** `runtimeClassName` — plain `runc`. A KVM node with a `kata` or
+  `gvisor` RuntimeClass installed therefore ends up *less* isolated under
+  `auto` than if you had pinned `--isolation kata` yourself.
+
+  An explicit pin is also validated: if the driver is not available on the
+  host, mica fails at boot with the probe results rather than silently
+  downgrading.
+</Warning>
+
+## How drivers apply
+
+- **runc** — the default container runtime; no extra host requirements. Note
+  that on the Docker backend this is *less* isolated than plain runc implies:
+  session containers are started **privileged** unless you pass
+  `--disable-privileged`, so a browser container has full host device access.
+- **gvisor / kata** — applied through the Kubernetes backend by setting
+  `runtimeClassName` on session pods (`--k8s-runtime-class`, or driver
+  auto-selection). Your cluster must have the corresponding RuntimeClass
+  installed (gVisor is the stock sandbox on several managed K8s offerings).
+- **firecracker / cloud_hypervisor** — will manage microVM lifecycles
+  directly, using the same OCI rootfs as every other driver. A rootfs +
+  kernel builder binary (`mica-rootfs`) exists as a scaffold.
+
+<Note>
+  One OCI rootfs feeds every driver. That is a deliberate no-vendor-lock-in
+  fence: moving a fleet from runc to gVisor to VM-grade isolation never
+  requires rebuilding browser images.
+</Note>

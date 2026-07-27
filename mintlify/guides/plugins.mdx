@@ -1,0 +1,72 @@
+---
+title: "WASM plugins"
+description: "Extend mica with WebAssembly Component Model plugins: lifecycle, session, artifact, and HTTP hooks."
+icon: "puzzle-piece"
+---
+
+<Warning>
+  The plugin system is **in active development**. The WIT contract is stable
+  and the host is scaffolded, but the end-to-end plugin path is not yet
+  fully wired — treat this page as a preview of the shipped design, and
+  don't build production dependencies on it yet.
+</Warning>
+
+mica embeds a WebAssembly Component Model runtime (wasmtime). Plugins are
+`.wasm` components written in any language with Component Model tooling
+(Rust, Go, JS, Python) against the WIT contract in
+[`wit/`](https://github.com/0xteamhq/mica/tree/main/wit) (package
+`mica:plugin@0.1.0`).
+
+## Hook points
+
+| Export | Fires |
+|---|---|
+| `lifecycle` | Plugin init (with per-plugin config) and graceful shutdown |
+| `session` | Session created / stopped |
+| `artifact` | Artifact produced (video, log) — e.g. custom uploaders |
+| `http` | Intercept WebDriver requests/responses on the proxy path |
+
+## Capability gating — fail closed
+
+Host functions are granted per plugin. `host-log` and `clock` are always
+available; the gated set is `http-client`, `s3-write`, and `state`. A plugin
+that imports a capability it was not granted **fails to instantiate at
+startup** with a clear error — no silent privilege.
+
+```bash
+mica --plugin-dir plugins/ \
+  --plugin-grants 'gcs=http-client,state;auth=http-client'
+```
+
+## Operator flags
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--plugin-dir` | empty | Directory of `.wasm` components; empty = plugins off |
+| `--plugin-grants` | empty | `<plugin>=<cap>[,<cap>...]` pairs joined by `;` |
+| `--plugin-config` | empty | TOML file; each `[plugins.<name>]` table is passed to that plugin's `lifecycle.init` (scalar values only) |
+| `--plugin-state-dir` | tmp dir | Durable directory backing the `state` capability — set a real path in production |
+| `--plugin-on-create-timeout` | `5s` | Total budget for the session on-create plugin chain |
+| `--plugin-http-timeout` | `500ms` | Per-call budget for HTTP intercept hooks — this is the proxy hot path |
+| `--plugin-shutdown-timeout` | `5s` | Per-plugin budget for `lifecycle.shutdown` |
+
+Slow plugins are cut off, not waited on: an exceeded on-create budget fails
+the session create as transient; an exceeded HTTP budget drops the
+intercept; an exceeded shutdown budget logs and continues exiting.
+
+## Examples
+
+The repository ships two example plugins under
+[`examples/plugins/`](https://github.com/0xteamhq/mica/tree/main/examples/plugins):
+
+- **`auth-header-injector`** — an `http` hook that stamps auth headers onto
+  proxied WebDriver traffic.
+- **`gcs-uploader`** — an `artifact` hook that ships artifacts to Google
+  Cloud Storage (the pattern for any non-S3 destination).
+
+## Scope notes
+
+- Plugins run on **nodes only** — [router](/guides/router) replicas do not
+  execute plugin hooks (v1).
+- The built-in [S3 uploader](/guides/artifacts#s3-upload) implements the
+  same artifact contract plugins target; a plugin can replace or augment it.

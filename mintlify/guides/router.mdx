@@ -1,0 +1,144 @@
+---
+title: "Router mode"
+description: "Scale to multiple nodes with the built-in stateless router — the GGR equivalent, in the same binary."
+icon: "route"
+---
+
+The same mica binary runs as a stateless routing tier in front of N mica
+nodes:
+
+```bash
+mica --router --nodes nodes.json
+```
+
+Backend and isolation flags are ignored in router mode — the router never
+touches Docker or Kubernetes. Run as many router replicas as you like behind
+any dumb L4 balancer; **no affinity or shared state is required**.
+
+## How it stays stateless
+
+Session ids returned to clients embed the owning node:
+
+```
+base64url(node_name) + "." + upstream_id
+```
+
+Any router replica decodes the prefix and forwards the request — no session
+table, no sticky routing.
+
+<Warning>
+  Session ids are **not UUIDs** in router mode. W3C-compliant clients already
+  treat ids as opaque strings; anything that parses them as UUIDs will break.
+</Warning>
+
+## Placement and failover
+
+- `POST /wd/hub/session` picks **weighted-random** among healthy nodes whose
+  cached `/status` advertises the requested browser/version.
+- On connect error, timeout, 5xx, or 429 the router fails over to the next
+  node (up to `--router-max-attempts`, default 3). Other 4xx responses are
+  returned verbatim.
+- There is **no router-side queue** — nodes queue. The per-attempt
+  `--router-create-timeout` (default 5m) is deliberately long to ride out a
+  node's queue.
+
+## Health
+
+A background poller GETs each node's `/status` every
+`--router-health-interval` (5s). A node is excluded from **new placements**
+(existing sessions still proxy) when:
+
+- it fails `--router-unhealthy-threshold` consecutive polls (default 2), or
+- it reports `"draining": true`.
+
+The router's own `/readyz` returns 503 when zero nodes are healthy.
+
+## What proxies
+
+Everything: WebDriver HTTP (streamed), `/vnc` and `/session/{id}/bidi`
+(WebSocket relay), `/devtools`, `/clipboard`, `/download`, and artifacts
+(`/video/{id}.mp4`, `/logs/{id}.log`) — artifact names carry the routed id.
+
+## nodes.json
+
+```json
+{
+  "nodes": [
+    {
+      "name": "node-a",
+      "endpoint": "https://mica-a.internal:4444",
+      "weight": 2,
+      "region": "us-east-1",
+      "labels": { "tier": "spot" },
+      "username": "router",
+      "password": "s3cret"
+    },
+    { "name": "node-b", "endpoint": "http://10.0.0.2:4444" }
+  ]
+}
+```
+
+| Field | Notes |
+|---|---|
+| `name` | Required. `[A-Za-z0-9_.-]+`, unique, and **stable** — it is embedded in live session ids; renaming or removing a node orphans its sessions. |
+| `endpoint` | Required `http(s)://host:port`. |
+| `weight` | Default 1. `0` = route-only: never placed, still proxied. |
+| `region` / `labels` | Surfaced in `/status` for dashboards; no routing semantics in v1. |
+| `username` / `password` | Basic credentials the router presents to that node. |
+
+Hot-reload with `kill -HUP <router pid>`. Added nodes start `unknown` and
+join placement after their first successful poll.
+
+## Authentication
+
+Client auth terminates **at the router** (`--users`, htpasswd format).
+Per-node credentials from `nodes.json` are injected on every forwarded
+request; the client's `Authorization` header never reaches the nodes.
+
+## Aggregated /status
+
+The router's `/status` is the ggr-ui equivalent: counters summed, browser
+maps unioned, sessions concatenated (each tagged with its `node` and a
+router-prefixed id), plus `"router": true` and a `nodes: [...]` array with
+per-node health. It is a strict superset of the node `/status` shape, so
+any dashboard or autoscaler that scrapes a node's `/status` keeps working
+unchanged against a router.
+
+<Note>
+  The bundled [admin dashboard](/guides/admin) is **not** one of them. The
+  router serves no `/admin` or `/admin/api/*` routes, and the SPA reads
+  same-origin `/admin/api/state` — not `/status` — with no configurable base
+  URL. Pointing it at a router returns 404s; open the dashboard on an
+  individual node, and consume the router's `/status` with your own tooling.
+</Note>
+
+## Ops runbook
+
+<AccordionGroup>
+  <Accordion title="Remove a node safely">
+    Set `"weight": 0` and SIGHUP; wait until the aggregated `/status` shows
+    zero sessions on the node; delete the entry. Alternatively
+    `POST /admin/api/drain {"active":true}` on the node itself — the router
+    sees `draining: true` on the next poll and stops placing there.
+  </Accordion>
+  <Accordion title="Router restarts and deploys">
+    In-flight VNC/BiDi WebSocket streams are severed (bounded by
+    `--graceful-period`). WebDriver HTTP is unaffected — the next request
+    lands on another replica and routes by session-id prefix.
+  </Accordion>
+  <Accordion title="Scaling routers">
+    Run N replicas behind any L4/L7 balancer. No affinity needed.
+  </Accordion>
+  <Accordion title="Plugins">
+    WASM plugins do not run router-side (v1). HTTP-intercept, artifact, and
+    lifecycle hooks stay on the nodes.
+  </Accordion>
+</AccordionGroup>
+
+## Alternative: no router tier
+
+For K8s-native single-cluster deployments, existing infrastructure works
+without a router: Ingress routing on the `mica/owner` pod label, HAProxy
+stick-tables, or anycast DNS. Reference configs (`nginx-ingress.yaml`,
+`haproxy.cfg`, `prometheus.yaml`) live in
+[`deploy/routing/`](https://github.com/0xteamhq/mica/tree/main/deploy/routing).

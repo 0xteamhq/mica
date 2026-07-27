@@ -178,7 +178,7 @@ mica recognizes a `mica:options` block in WebDriver capabilities:
 }
 ```
 
-The `X-Mica-No-Wait: 1` request header on `POST /wd/hub/session` returns `503` instead of blocking when the queue is full.
+The `X-Mica-No-Wait: 1` request header on `POST /wd/hub/session` fails the create immediately instead of blocking when the queue is full — HTTP `500` with the W3C body `{"value":{"error":"session not created","message":"queue is full"}}`. Match on the error/message fields, not the status code.
 
 ## Status
 

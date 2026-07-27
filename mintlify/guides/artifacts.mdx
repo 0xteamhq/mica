@@ -1,0 +1,128 @@
+---
+title: "Video, logs & S3"
+description: "Record sessions, capture container logs, and ship artifacts to S3-compatible storage."
+icon: "film"
+---
+
+## Video recording
+
+<Warning>
+  **Always pass an absolute `--video-output-dir`.** mica reuses the value as
+  the host side of the recorder container's bind mount, and Docker reads a
+  relative source — including mica's own default, `video` — as a *named
+  volume* rather than a host path. Recordings then go somewhere mica never
+  reads, with no error, even when mica runs directly on the host.
+</Warning>
+
+<Warning>
+  **`enableVideo` requires a self-recording browser image.** mica starts no
+  recorder sidecar — it sets `ENABLE_VIDEO=true` and `FILE_NAME=<requestId>`
+  on the browser container and bind-mounts the artifact dir at `/video`,
+  expecting the *image itself* to capture its display and write the file.
+  Headless images produce no video: both `chrome-headless-shell` and the
+  Lightpanda bridge have no display to record, and a plain `selenoid/chrome`
+  only records if that image ships a recorder.
+
+  Use a recording-capable image — the repo's `docker/chromium-recorder`, or a
+  selenoid/aerokube-style video image — or `enableVideo` succeeds and
+  silently yields nothing. The same applies to `enableVNC`: the image must
+  expose a VNC server on `5900`.
+</Warning>
+
+Request recording per session via `mica:options`:
+
+```json
+{
+  "mica:options": {
+    "enableVideo": true,
+    "videoFrameRate": 12,
+    "videoCodec": "libx264",
+    "videoScreenSize": "1280x1024"
+  }
+}
+```
+
+Recordings land in `--video-output-dir`, are **always named
+`{sessionId}.mp4`**, and are served at:
+
+```
+GET    /video/{name}     # download
+DELETE /video/{name}     # delete
+```
+
+`videoScreenSize` falls back to `screenResolution` when unset.
+
+<Warning>
+  **Recordings missing while sessions succeed?** If mica itself runs in a
+  container, `--video-output-dir` must resolve to the same path inside and
+  outside it. mica passes the flag verbatim as the host side of the recorder
+  container's bind mount, so the host daemon resolves it against the host
+  filesystem — a mismatched mount sends the `.mp4` somewhere mica never
+  reads. See the [Docker deployment guide](/guides/docker).
+</Warning>
+
+## Container logs
+
+- Per session: `"enableLog": true` in `mica:options`; fetch/delete via
+  `GET/DELETE /logs/{name}` from `--log-output-dir`, where `{name}` is
+  `{sessionId}.log`. (`videoName` / `logName` do **not** override these
+  names — see the [capabilities reference](/reference/capabilities).)
+- Fleet-wide: `--save-all-logs` streams **every** container's stdout/stderr
+  to `<log-output-dir>/<container_id>.log`, regardless of `enableLog`.
+- Docker log driver config: `--log-conf '{"type":"json-file","config":{"max-size":"10m"}}'`
+  maps to Docker's `HostConfig.LogConfig`.
+
+## S3 upload
+
+When `--s3-bucket` is set, mica uploads artifacts (video, logs) to S3 as
+sessions finish, driven by internal `FileCreated` / `SessionStopped` events —
+uploads never block session traffic.
+
+```bash
+mica --conf browsers.json \
+  --s3-bucket my-artifacts \
+  --s3-region us-east-1 \
+  --s3-prefix grid-a/
+```
+
+| Flag / env | Purpose |
+|---|---|
+| `--s3-bucket` (`MICA_S3_BUCKET`) | Bucket name; empty disables upload |
+| `--s3-region` (`MICA_S3_REGION`) | Region; empty uses the AWS SDK default chain |
+| `--s3-prefix` (`MICA_S3_PREFIX`) | Key prefix prepended to every object |
+| `--s3-force-path-style` (`MICA_S3_FORCE_PATH_STYLE`) | Path-style addressing (`endpoint/bucket/key`) — required for MinIO / Ceph |
+| `AWS_ENDPOINT_URL_S3` | Standard AWS env var for custom S3-compatible endpoints |
+
+Credentials come from the standard AWS SDK chain (env vars, instance
+profile, IRSA, etc.).
+
+### Per-session key layout
+
+Override the object key per session with `s3KeyPattern` in `mica:options`:
+
+```json
+{ "mica:options": { "s3KeyPattern": "$browserName/$date/$sessionId/$fileName" } }
+```
+
+Tokens: `$fileName`, `$fileNameWithoutExt`, `$fileExtension`, `$browserName`,
+`$browserVersion`, `$sessionId`, `$fileType`, `$date`.
+
+### MinIO example
+
+```bash
+AWS_ACCESS_KEY_ID=minio AWS_SECRET_ACCESS_KEY=minio123 \
+AWS_ENDPOINT_URL_S3=http://minio:9000 \
+mica --conf browsers.json --s3-bucket artifacts --s3-force-path-style
+```
+
+<Note>
+  Custom upload destinations beyond S3 (e.g. GCS) can be implemented as
+  [WASM plugins](/guides/plugins) — the repository ships a `gcs-uploader`
+  example.
+</Note>
+
+## Streaming artifacts
+
+Streaming video **during** the session (rather than uploading after it ends)
+is scaffolded but not shipped yet — the traits exist, the CDP/ffmpeg/S3
+multipart wiring is in development.

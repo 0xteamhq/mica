@@ -1,0 +1,97 @@
+---
+title: "Admin dashboard"
+description: "The /admin control plane: live sessions, kill/drain, config editing, users, and quotas."
+icon: "gauge-high"
+---
+
+mica ships a web control plane at `/admin` — a React dashboard embedded in
+the binary — backed by a JSON API at `/admin/api/*`.
+
+<Note>
+  The dashboard UI is compiled in behind the `ui` cargo feature (enabled in
+  the official Docker image). Builds without the feature serve a placeholder
+  page at `/admin`, but the `/admin/api/*` endpoints work identically.
+</Note>
+
+## Roles
+
+Admin access rides on the same htpasswd file as client auth (`--users`),
+with a third column marking admins:
+
+```
+alice:$2y$10$...:admin
+bob:$2y$10$...
+```
+
+Mutating admin endpoints require the `admin` role. In open mode (no
+`--users`), the admin API is open too — gate it before exposing mica beyond
+localhost.
+
+## What you can do
+
+| Area | Endpoint | Notes |
+|---|---|---|
+| Dashboard snapshot | `GET /admin/api/state` | Capacity, sessions, config, health in one call |
+| Live events | `GET /admin/api/events` | SSE stream: session lifecycle events + stats frames every 2s |
+| Kill a session | `DELETE /admin/api/sessions/{id}` | Tears down the container and frees the slot |
+| Drain mode | `POST /admin/api/drain` | `{"active": true}` — node stops accepting new sessions, `/readyz` turns 503, routers stop placing (see the readiness-probe caveat below) |
+| Reload config | `POST /admin/api/config/reload` | Same path as SIGHUP |
+| Edit browsers.json | `/admin/api/config/*` | Raw-bytes editing — the file on disk stays the source of truth |
+| Users | `GET /admin/api/users`, `PUT/DELETE /admin/api/users/{name}` | htpasswd CRUD |
+| Quotas | `GET/PUT /admin/api/quotas` | Per-user session caps |
+| Recordings | `GET /admin/api/recordings` | Browse recorded session videos |
+
+## Quotas
+
+Per-user session caps live in a JSON file (`--quotas`):
+
+```json
+{ "default": 0, "users": { "alice": 3 } }
+```
+
+`0` means unlimited. Quotas are enforced **before** the global queue — an
+over-quota create fails fast without consuming a slot — and apply only to
+authenticated sessions (open mode has no owner to meter). The file
+hot-reloads on SIGHUP and is editable via `PUT /admin/api/quotas`.
+
+## Drain workflow
+
+Draining is the node-side half of safe fleet maintenance:
+
+1. `POST /admin/api/drain {"active": true}` (or click Drain in the UI).
+2. The node's `/readyz` returns 503 and `/status` reports
+   `"draining": true` — [routers](/guides/router) stop placing new sessions
+   there.
+3. Existing sessions run to completion; watch them empty in the dashboard.
+4. Stop the process (SIGTERM drains whatever remains, bounded by
+   `--graceful-period`) or flip drain back off.
+
+<Warning>
+  **On Kubernetes, drain alone does not remove the pod from the Service.**
+  The shipped chart hardcodes `readinessProbe.httpGet.path: /ping`, and
+  `/ping` never reflects drain state — so a draining pod stays Ready and
+  keeps receiving new sessions.
+
+  **Do not simply repoint the probe at `/readyz`.** It also returns 503 when
+  the node is fully booked (`used >= limit` with nothing pending), so a
+  replica at capacity would go NotReady, be dropped from the Service
+  endpoints along with its `ClientIP` affinity, and follow-up commands for
+  its *live* sessions would land on another replica as
+  `invalid session id` — breaking running sessions exactly at peak load.
+
+  Prefer the [router](/guides/router) tier, which reads `/status.draining`
+  directly and needs no probe change. If you must gate the Service on drain
+  state, use a probe that keys on `draining` alone (e.g. an exec probe
+  parsing `/status`) rather than `/readyz`.
+</Warning>
+
+## Fleet view
+
+A [router's](/guides/router) aggregated `/status` is the ggr-ui equivalent:
+every node's health, sessions tagged by node, and per-node detail in one
+JSON document.
+
+It is a data endpoint, not a UI. The dashboard shipped in this binary is
+node-local — it fetches same-origin `/admin/api/*`, which the router does
+not serve — so scrape the router's `/status` with your own tooling (or
+Grafana) for a fleet view, and use the dashboard per node.

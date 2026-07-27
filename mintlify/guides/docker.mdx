@@ -1,0 +1,141 @@
+---
+title: "Deploy on Docker"
+description: "Run mica on a single host with the Docker backend — the simplest production deployment."
+icon: "docker"
+---
+
+A single VM with Docker is the smallest production shape: one mica container
+that launches sibling browser containers through the host's Docker socket.
+
+## Run
+
+<Warning>
+  **mica in a container needs host networking to reach its browsers.** The
+  Docker backend starts browser containers as *siblings* on the host daemon
+  and dials them at `http://127.0.0.1:<published port>`. From inside its own
+  network namespace, mica cannot reach those ports, and every create fails
+  after `--service-startup-timeout`. On Linux use `--network host` (and drop
+  `-p`), as below. On Docker Desktop / OrbStack host networking does not
+  bridge to the host the same way — run the mica binary **on the host**
+  instead for real sessions.
+</Warning>
+
+```bash
+docker run -d --name mica --network host \
+  --restart unless-stopped \
+  --group-add "$(stat -c '%g' /var/run/docker.sock)" \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /etc/mica/browsers.json:/etc/mica/browsers.json:ro \
+  -v /var/mica/video:/var/mica/video \
+  -v /var/mica/logs:/var/mica/logs \
+  ghcr.io/0xteamhq/mica:latest \
+  --conf /etc/mica/browsers.json \
+  --limit 10 \
+  --video-output-dir /var/mica/video \
+  --log-output-dir /var/mica/logs
+```
+
+<Warning>
+  The artifact directories are mounted at an **identical path on both sides**
+  (`/var/mica/video:/var/mica/video`), and that is required, not stylistic.
+  mica reuses the `--video-output-dir` string verbatim as the host side of
+  the recorder container's bind mount, and the host Docker daemon resolves it
+  against the host filesystem. A conventional `-v /var/mica/video:/video`
+  with `--video-output-dir /video` sends the recorder's output to host
+  `/video` while mica lists and serves from host `/var/mica/video` — the
+  session succeeds and the recording silently never appears.
+</Warning>
+
+<Warning>
+  Mounting `/var/run/docker.sock` grants mica control of the host Docker
+  daemon — treat the mica container as trusted infrastructure and gate the
+  listener with `--users` if it is reachable beyond localhost.
+
+  `--group-add` is required because the published image runs as `nonroot`,
+  while the socket is typically `root:docker` mode `0660` — without it mica
+  fails to connect to the daemon before any session is attempted.
+</Warning>
+
+Create the artifact directories owned by that same `nonroot` user (uid
+`65532` in the distroless base) **before** the first run:
+
+```bash
+sudo mkdir -p /var/mica/video /var/mica/logs
+sudo chown -R 65532:65532 /var/mica/video /var/mica/logs
+```
+
+<Warning>
+  mica writes into the artifact dir from inside the container — it renames
+  the recorder's `{requestId}.mp4` to `{sessionId}.mp4` and writes a
+  `{sessionId}.json` sidecar. Both failures are only logged at `warn`, so if
+  the directory is not writable by uid `65532` (Docker auto-creates a missing
+  bind source as `root:root 0755`), sessions still succeed while recordings
+  never appear on the Recordings page or in S3 — the same silent symptom as
+  the path mismatch above, from a different cause.
+</Warning>
+
+## Docker Compose
+
+A ready-made compose stack (mica + example config) lives in
+[`deploy/compose/`](https://github.com/0xteamhq/mica/tree/main/deploy/compose)
+in the repository.
+
+## Pull browser images ahead of time
+
+mica pulls an image on demand if it is missing, so the *first* create for a
+browser pays the full pull before the session starts — and that wait counts
+against the client's session-create timeout. Pre-pull every image referenced
+in `browsers.json` so no session start waits on a registry:
+
+```bash
+docker pull selenoid/chrome:126.0
+```
+
+Pull whatever images your `browsers.json` actually references. Note that
+mica's own `chrome-headless-shell` image ships CDP only and
+[needs a WebDriver server added](/guides/browser-images) before it can serve
+sessions — pre-pull your derived image, not the base one.
+
+## Production checklist
+
+<Steps>
+  <Step title="Size the session cap">
+    `--limit` is per-replica. Budget roughly one CPU and 1–2 GiB RAM per
+    concurrent Chrome session, plus the 2 GiB `/dev/shm` default (shared
+    memory is not committed unless used).
+  </Step>
+  <Step title="Drop container privileges">
+    The Docker backend starts session containers **privileged by default**
+    (`--disable-privileged` is off), giving browser containers full host
+    device access. Unless a driver you use needs it, pass
+    `--disable-privileged`. This matters most when sessions run untrusted
+    pages — see [isolation](/concepts/isolation).
+  </Step>
+  <Step title="Enable auth and quotas">
+    `--users htpasswd` gates every client-facing endpoint with Basic auth;
+    `--quotas quotas.json` caps sessions per user. Both hot-reload on SIGHUP
+    and are editable from the [admin dashboard](/guides/admin).
+  </Step>
+  <Step title="Wire observability">
+    Scrape `/metrics` with Prometheus; probe `/healthz` and `/readyz`.
+    `/status` carries the live capacity + sessions map for dashboards.
+  </Step>
+  <Step title="Ship artifacts off the host">
+    Configure [S3 upload](/guides/artifacts#s3-upload) so video and logs
+    don't accumulate on local disk.
+  </Step>
+  <Step title="Plan config changes">
+    Edit `browsers.json` and `kill -HUP $(pidof mica)` (or
+    `docker kill -s HUP mica`) — zero-downtime reload, in-flight sessions
+    untouched.
+  </Step>
+  <Step title="Drain before maintenance">
+    `docker stop --time 330 mica` sends SIGTERM and gives the default
+    `--graceful-period` (300s) room to drain sessions cleanly.
+  </Step>
+</Steps>
+
+## Scaling beyond one host
+
+Run one mica per VM and put the built-in [router](/guides/router) in front —
+same binary, `--router --nodes nodes.json`, no shared state.

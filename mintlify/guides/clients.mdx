@@ -1,0 +1,118 @@
+---
+title: "Test clients"
+description: "Point Selenium, WebdriverIO, or any W3C WebDriver client at mica."
+icon: "flask"
+---
+
+mica speaks the W3C WebDriver wire format on `/wd/hub`, so existing clients
+work without modification.
+
+## Selenium
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    from selenium import webdriver
+
+    opts = webdriver.ChromeOptions()
+    opts.set_capability("mica:options", {
+        "enableVNC": True,
+        "enableVideo": True,
+        "screenResolution": "1280x1024x24",
+        "name": "checkout-flow",
+    })
+
+    driver = webdriver.Remote("http://localhost:4444/wd/hub", options=opts)
+    driver.get("https://example.com")
+    driver.quit()
+    ```
+  </Tab>
+  <Tab title="Java">
+    ```java
+    ChromeOptions opts = new ChromeOptions();
+    opts.setCapability("mica:options", Map.of(
+        "enableVNC", true,
+        "enableVideo", true
+    ));
+
+    WebDriver driver = new RemoteWebDriver(
+        new URL("http://localhost:4444/wd/hub"), opts);
+    driver.get("https://example.com");
+    driver.quit();
+    ```
+  </Tab>
+</Tabs>
+
+## WebdriverIO
+
+```js
+import { remote } from "webdriverio";
+
+const browser = await remote({
+  path: "/wd/hub",
+  hostname: "localhost",
+  port: 4444,
+  capabilities: {
+    browserName: "chrome",
+    "mica:options": { enableVNC: true, enableVideo: true },
+  },
+});
+
+await browser.url("https://example.com");
+await browser.deleteSession();
+```
+
+## Playwright
+
+Playwright drives browsers over its own protocol (CDP), not WebDriver, and
+`chromium.connect()` expects a Playwright server — mica exposes no such
+endpoint. There is no supported way to point Playwright at a mica grid today.
+Use a WebDriver client (Selenium, WebdriverIO, `thirtyfour`) instead.
+
+## Raw wire (curl)
+
+```bash
+# Create
+curl -X POST http://localhost:4444/wd/hub/session \
+  -H 'Content-Type: application/json' \
+  -d '{"capabilities":{"alwaysMatch":{"browserName":"chrome"}}}'
+
+# Navigate
+curl -X POST http://localhost:4444/wd/hub/session/$SESSION_ID/url \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://example.com"}'
+
+# Delete
+curl -X DELETE http://localhost:4444/wd/hub/session/$SESSION_ID
+```
+
+## Vendor capabilities
+
+Everything mica-specific rides in the `mica:options` capability block — VNC,
+video, resolution, timezone, per-session timeout, environment variables,
+network attachments, and more. The complete list is in the
+[capabilities reference](/reference/capabilities).
+
+## Queue behavior from the client's side
+
+When the grid is at capacity, a create request **waits** in mica's queue by
+default (bounded by the client's own timeout). If you would rather fail
+fast, send the `X-Mica-No-Wait: 1` header on `POST /wd/hub/session` — mica
+fails the create immediately instead of queueing, with HTTP `500` and the
+W3C body `{"value":{"error":"session not created","message":"queue is full"}}`.
+Match on the `error`/`message` fields rather than the status code: mica maps
+every WebDriver error except `invalid argument` (400) and `invalid session id`
+(404) to `500`.
+
+## Authentication
+
+If the operator has enabled `--users`, every WebDriver, VNC, artifact, and
+relay endpoint requires HTTP Basic auth:
+
+```python
+driver = webdriver.Remote("http://alice:secret@localhost:4444/wd/hub", options=opts)
+```
+
+Health probes (`/healthz`, `/readyz`), `/ping`, `/metrics`, and
+`/openapi.yaml` remain open so orchestrators and scrapers need no
+credentials.
