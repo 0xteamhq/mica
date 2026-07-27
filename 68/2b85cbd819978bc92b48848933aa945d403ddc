@@ -1,0 +1,159 @@
+docs/superpowers/specs/2026-07-25-mintlify-docs-site-design.md
+  s_d8440d3895b6a5::t_c573e462663ee0 1-12,21-37,39-40,43-44,47
+  s_a0a7e8b3aa6ace::t_2043adb4ee109f 38,41-42,45-46
+  s_d8440d3895b6a5::t_a05e446a3b04f9 13-20
+mintlify/reference/browsers-json.mdx
+  s_d8440d3895b6a5::t_2a99071c416e92 1-22,24-28,30-53,56-78
+  s_a0a7e8b3aa6ace::t_19d6470a54e4d3 23,29
+  s_a0a7e8b3aa6ace::t_ed04bc7fe4ea48 55
+  s_a0a7e8b3aa6ace::t_022827eafa4aaa 54
+mintlify/reference/cli.mdx
+  s_a0a7e8b3aa6ace::t_56c9fdaf74b1ad 44
+  s_a0a7e8b3aa6ace::t_566263366dc5ed 33
+  s_a0a7e8b3aa6ace::t_d3c5e60105d47e 23
+  s_d8440d3895b6a5::t_215b771afef49b 1-19,21-22,24-32,34-43,45-49,51-92,98-106
+  s_a0a7e8b3aa6ace::t_9c40a8021caf71 20
+  s_a0a7e8b3aa6ace::t_5aee26b7ad4a04 50
+  s_a0a7e8b3aa6ace::t_3973f13e893236 93-97
+mintlify/guides/router.mdx
+  s_a0a7e8b3aa6ace::t_29d9bb94c5f557 143
+  s_a0a7e8b3aa6ace::t_8d1976fc104a58 104-113
+  s_d8440d3895b6a5::t_79a5e10a0c5b5e 1-103,114-142,144
+mintlify/guides/browser-images.mdx
+  s_a0a7e8b3aa6ace::t_29937d2e4e387c 33,35
+  s_a0a7e8b3aa6ace::t_3c69605653e72a 90-93
+  s_a0a7e8b3aa6ace::t_49574b0561342d 18-29,36-37
+  s_d8440d3895b6a5::t_182f94ecfec2d9 62-65
+  s_d8440d3895b6a5::t_813927f528266d 66-71
+  s_d8440d3895b6a5::t_d6163db3025592 1-17,30-32,34,38-61,72-89,94-100,123-134
+  s_a0a7e8b3aa6ace::t_479e8cbfc3515a 101-122
+mintlify/reference/capabilities.mdx
+  s_a0a7e8b3aa6ace::t_d6080c29724350 7-10
+  s_a0a7e8b3aa6ace::t_3de38430706d38 53
+  s_a0a7e8b3aa6ace::t_80c23a0260448a 84
+  s_a0a7e8b3aa6ace::t_6fbc4a2a0908eb 78
+  s_a0a7e8b3aa6ace::t_59766b91ce2fcb 30-31,39-40
+  s_a0a7e8b3aa6ace::t_472e5dfb22e908 48
+  s_a0a7e8b3aa6ace::t_aaa6c15e4c5b1a 45-46
+  s_a0a7e8b3aa6ace::t_796e191c65bb71 32-38
+  s_d8440d3895b6a5::t_1fb221e46a8f50 1-6,11-29,41-44,47,49-52,54-77,79-83
+mintlify/guides/clients.mdx
+  s_d8440d3895b6a5::t_bbdb1b902562d4 1-2,4-45,47-48,50,59,63,71-100,106-118
+  s_a0a7e8b3aa6ace::t_cd970d47af827f 3
+  s_a0a7e8b3aa6ace::t_c615770a8390a6 46,49,51-58,60-62,64-70
+  s_a0a7e8b3aa6ace::t_f7ec332a8d450b 101-105
+README.md
+  s_a0a7e8b3aa6ace::t_51ad0b9c0b4dee 181
+mintlify/concepts/backends.mdx
+  s_d8440d3895b6a5::t_2b80771e41fbec 1-58
+mintlify/guides/admin.mdx
+  s_a0a7e8b3aa6ace::t_b0a0925f355e31 63-64
+  s_a0a7e8b3aa6ace::t_30b5834606af60 73,75-80,82-85
+  s_a0a7e8b3aa6ace::t_178c28ab0153a2 90-97
+  s_a0a7e8b3aa6ace::t_500c5cebe0e12e 37
+  s_a0a7e8b3aa6ace::t_259c32af374a69 69-72,74,81,86-87
+  s_d8440d3895b6a5::t_a5cc8b0deb0385 1-36,38-62,65-68,88-89
+mintlify/guides/artifacts.mdx
+  s_a0a7e8b3aa6ace::t_7bef5811b79fe3 45-46
+  s_a0a7e8b3aa6ace::t_9575e37f200e34 10-17
+  s_d8440d3895b6a5::t_018c0b075ff079 1-8,32-44,47-54,64-66,70-106,109-128
+  s_a0a7e8b3aa6ace::t_50e8608917480e 9,18-31
+  s_a0a7e8b3aa6ace::t_9c34a1f5693057 55-63
+  s_a0a7e8b3aa6ace::t_b85c909b85169a 67-69
+  s_a0a7e8b3aa6ace::t_f95287659a991a 107-108
+mintlify/reference/endpoints.mdx
+  s_a0a7e8b3aa6ace::t_da67da90d2272b 32
+  s_a0a7e8b3aa6ace::t_57883f9d3e67a7 63
+  s_d8440d3895b6a5::t_cd6a7695736cba 8-10
+  s_d8440d3895b6a5::t_ae43ab8429a30d 1-6,11-21,23-27,29-31,33-62,64-73
+  s_a0a7e8b3aa6ace::t_434f77646de6bb 7
+  s_a0a7e8b3aa6ace::t_1f34a04db97609 22
+  s_a0a7e8b3aa6ace::t_aa3ac8ea50d70d 28
+mintlify/index.mdx
+  s_a0a7e8b3aa6ace::t_d9c8a1e8ef01d2 23-24
+  s_d8440d3895b6a5::t_211d0f8a48dec9 44-50
+  s_a0a7e8b3aa6ace::t_6cdaa49e54e93e 74
+  s_d8440d3895b6a5::t_a908091480a250 79-80
+  s_d8440d3895b6a5::t_aad7f4b528eea7 1-22,25-43,61-73,75-78,81-82
+  s_d8440d3895b6a5::t_40585f2ce468e5 51-60
+tests/queue_full_wire_test.rs
+  s_a0a7e8b3aa6ace::t_aac09042aef7bf 173
+  s_a0a7e8b3aa6ace::t_42272b65517e5d 43,48-49
+  s_a0a7e8b3aa6ace::t_26c163615b840c 1-42,44-47,50-91,93-97,102-103,135-142,154-155,161-172,174-176
+  s_a0a7e8b3aa6ace::t_9c3462ef756516 113-123
+  s_a0a7e8b3aa6ace::t_d1995fd09665cc 92,98-101,104-112,124-134,143-153,156-160
+mintlify/guides/docker.mdx
+  s_a0a7e8b3aa6ace::t_ae52fa44dd852f 12-22,24,26
+  s_a0a7e8b3aa6ace::t_b1825d87ff20a9 29-30,34-35,37-47
+  s_a0a7e8b3aa6ace::t_43cdec62c0c474 53-56
+  s_d8440d3895b6a5::t_187e5ed116df07 1-11,23,25,27-28,31-33,36,48-52,57-58,77-84,89-90,92,98-106,114-141
+  s_a0a7e8b3aa6ace::t_f89378bf6f0182 91,93-97
+  s_a0a7e8b3aa6ace::t_abe4bdb7828311 107-113
+  s_a0a7e8b3aa6ace::t_3dd3252ffbc7dd 59-76
+  s_a0a7e8b3aa6ace::t_068fda41634e3c 85-88
+mintlify/guides/warm-pool.mdx
+  s_a0a7e8b3aa6ace::t_a83385319b93f0 44-45
+  s_a0a7e8b3aa6ace::t_e69db3f5109e20 53-58
+  s_d8440d3895b6a5::t_d529bf7c5a20ee 1-43,46-52,59-64
+src/cli.rs
+  s_a0a7e8b3aa6ace::t_44b5a6a66472d7 74
+  s_a0a7e8b3aa6ace::t_0841c20b4468b3 75
+  s_a0a7e8b3aa6ace::t_80b0c4b815c53c 76-79
+mintlify/guides/plugins.mdx
+  s_d8440d3895b6a5::t_324153efaf04cf 1-72
+mintlify/concepts/architecture.mdx
+  s_d8440d3895b6a5::t_5dd3523eff71f3 1-9,21-31,40-81
+  s_d8440d3895b6a5::t_8bfec6c5e340f4 15-20
+  s_d8440d3895b6a5::t_d3a958f57a981e 10-14
+  s_a0a7e8b3aa6ace::t_428c3d7b67a88e 32-39
+mintlify/guides/kubernetes.mdx
+  s_a0a7e8b3aa6ace::t_9c7666255549a8 11-18,27,30
+  s_a0a7e8b3aa6ace::t_a8dd395142e819 7-8,10,19-20,26
+  s_a0a7e8b3aa6ace::t_1bd184a0c818d9 85-91,93-95
+  s_d8440d3895b6a5::t_351d9d02711cad 1-6,9,21-25,29,44-56,58-84,98-126
+  s_a0a7e8b3aa6ace::t_5aa03ba08ea3aa 57
+  s_a0a7e8b3aa6ace::t_4b40a9bb7647ff 92,96-97
+  s_a0a7e8b3aa6ace::t_f334e39a7a9290 28,31-43
+mintlify/concepts/isolation.mdx
+  s_a0a7e8b3aa6ace::t_7817f341b87591 30-33,39-52
+  s_d8440d3895b6a5::t_e91f5942bce1fd 1-29,34-38,53-55,60-72
+  s_a0a7e8b3aa6ace::t_427f89d134869f 56-59
+mintlify/quickstart.mdx
+  s_a0a7e8b3aa6ace::t_1e3e8514a39fc3 137,139,141-148,150-152
+  s_a0a7e8b3aa6ace::t_dc6c245941caa5 12-19,22-38
+  s_a0a7e8b3aa6ace::t_270c27dbf0edde 60-70
+  s_a0a7e8b3aa6ace::t_1e0538734362de 45-46,49-50,58-59,79
+  s_a0a7e8b3aa6ace::t_3bc246b1e35f6a 41-42
+  s_a0a7e8b3aa6ace::t_a09624020e2258 20-21
+  s_d8440d3895b6a5::t_7aa70c90fcaf12 1-11,39-40,43-44,47-48,52,56-57,80,86-90,94-96,103-136,138,140,149,153-186
+  s_a0a7e8b3aa6ace::t_49dcc36b3ffb08 71-78
+  s_a0a7e8b3aa6ace::t_7b8c7e8de3e579 91-93,97-102
+  s_a0a7e8b3aa6ace::t_a1a1af25d46bb4 51,53-55
+  s_a0a7e8b3aa6ace::t_6f28f8905da888 81-85
+mintlify/docs.json
+  s_d8440d3895b6a5::t_ceaa74fc67b236 1-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "682b85cbd819978bc92b48848933aa945d403ddc",
+  "prompts": {},
+  "sessions": {
+    "s_a0a7e8b3aa6ace": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9d310658-9d18-4b6c-a7e3-b2db842f81e9",
+        "model": "claude-opus-5"
+      },
+      "human_author": "vasanth <itsparser@gmail.com>"
+    },
+    "s_d8440d3895b6a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6b1e5bb3-e27d-4b50-a7a0-92d2664408c1",
+        "model": "claude-fable-5"
+      },
+      "human_author": "vasanth <itsparser@gmail.com>"
+    }
+  }
+}
